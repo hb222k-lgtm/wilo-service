@@ -1,0 +1,534 @@
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from PIL import Image, ImageOps
+import sqlite3, os, uuid, io
+from datetime import datetime
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__, static_folder='static')
+CORS(app)
+
+# Railway는 DATA_DIR 환경변수로 볼륨 경로를 지정, 로컬은 'data' 사용
+DATA_DIR  = os.environ.get('DATA_DIR', 'data')
+DB_PATH   = os.path.join(DATA_DIR, 'service.db')
+PHOTO_DIR = os.path.join(DATA_DIR, 'photos')
+THUMB_DIR = os.path.join(DATA_DIR, 'thumbs')
+ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'}
+
+os.makedirs(PHOTO_DIR, exist_ok=True)
+os.makedirs(THUMB_DIR, exist_ok=True)
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS sites (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            address TEXT,
+            contact_name TEXT,
+            contact_phone TEXT,
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS visits (
+            id TEXT PRIMARY KEY,
+            site_id TEXT NOT NULL,
+            visit_date TEXT NOT NULL,
+            work_content TEXT,
+            engineer TEXT,
+            status TEXT DEFAULT 'completed',
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS photos (
+            id TEXT PRIMARY KEY,
+            site_id TEXT,
+            visit_id TEXT,
+            schedule_id TEXT,
+            filename TEXT NOT NULL,
+            caption TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
+            FOREIGN KEY (visit_id) REFERENCES visits(id) ON DELETE SET NULL,
+            FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS schedules (
+            id TEXT PRIMARY KEY,
+            site_id TEXT,
+            title TEXT NOT NULL,
+            scheduled_date TEXT NOT NULL,
+            scheduled_time TEXT,
+            memo TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
+# 기존 DB 마이그레이션
+def migrate_db():
+    conn = get_db()
+    photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
+    if 'schedule_id' not in photo_cols:
+        conn.execute("ALTER TABLE photos ADD COLUMN schedule_id TEXT")
+    visit_cols = [r[1] for r in conn.execute("PRAGMA table_info(visits)").fetchall()]
+    if 'schedule_id' not in visit_cols:
+        conn.execute("ALTER TABLE visits ADD COLUMN schedule_id TEXT")
+    conn.commit()
+    conn.close()
+
+migrate_db()
+
+
+def make_thumb(src_path, thumb_path, size=(400, 400)):
+    try:
+        img = Image.open(src_path)
+        img = img.convert('RGB')
+        img.thumbnail(size, Image.LANCZOS)
+        img.save(thumb_path, 'JPEG', quality=75)
+    except Exception:
+        pass
+
+
+# ── Sites ─────────────────────────────────────────────────────────────────────
+
+@app.route('/api/sites', methods=['GET'])
+def get_sites():
+    q = request.args.get('q', '').strip()
+    conn = get_db()
+    if q:
+        rows = conn.execute(
+            'SELECT * FROM sites WHERE name LIKE ? OR address LIKE ? ORDER BY name',
+            (f'%{q}%', f'%{q}%')
+        ).fetchall()
+    else:
+        rows = conn.execute('SELECT * FROM sites ORDER BY name').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/sites', methods=['POST'])
+def create_site():
+    d = request.json
+    if not d.get('name', '').strip():
+        return jsonify({'error': '현장명을 입력하세요'}), 400
+    sid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO sites (id,name,address,contact_name,contact_phone,memo) VALUES (?,?,?,?,?,?)',
+        (sid, d['name'].strip(), d.get('address'), d.get('contact_name'), d.get('contact_phone'), d.get('memo'))
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM sites WHERE id=?', (sid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/sites/<sid>', methods=['GET'])
+def get_site(sid):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM sites WHERE id=?', (sid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)) if row else ('', 404)
+
+
+@app.route('/api/sites/<sid>', methods=['PUT'])
+def update_site(sid):
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE sites SET name=?,address=?,contact_name=?,contact_phone=?,memo=? WHERE id=?',
+        (d['name'], d.get('address'), d.get('contact_name'), d.get('contact_phone'), d.get('memo'), sid)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM sites WHERE id=?', (sid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route('/api/sites/<sid>', methods=['DELETE'])
+def delete_site(sid):
+    conn = get_db()
+    conn.execute('DELETE FROM sites WHERE id=?', (sid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# ── Visits ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/sites/<sid>/visits', methods=['GET'])
+def get_visits(sid):
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM visits WHERE site_id=? ORDER BY visit_date DESC', (sid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/visits', methods=['GET'])
+def all_visits():
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT v.*, s.name site_name FROM visits v
+        LEFT JOIN sites s ON v.site_id=s.id
+        ORDER BY v.visit_date DESC LIMIT 50
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/sites/<sid>/visits', methods=['POST'])
+def create_visit(sid):
+    d = request.json
+    if not d.get('visit_date', '').strip():
+        return jsonify({'error': '날짜를 입력하세요'}), 400
+    vid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO visits (id,site_id,visit_date,work_content,engineer,status,memo) VALUES (?,?,?,?,?,?,?)',
+        (vid, sid, d['visit_date'], d.get('work_content'), d.get('engineer'), d.get('status', 'completed'), d.get('memo'))
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM visits WHERE id=?', (vid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/visits/<vid>', methods=['PUT'])
+def update_visit(vid):
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE visits SET visit_date=?,work_content=?,engineer=?,status=?,memo=? WHERE id=?',
+        (d['visit_date'], d.get('work_content'), d.get('engineer'), d.get('status', 'completed'), d.get('memo'), vid)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM visits WHERE id=?', (vid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route('/api/visits/<vid>', methods=['DELETE'])
+def delete_visit(vid):
+    conn = get_db()
+    conn.execute('DELETE FROM visits WHERE id=?', (vid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# ── Photos ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/sites/<sid>/photos', methods=['GET'])
+def get_photos(sid):
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM photos WHERE site_id=? ORDER BY created_at DESC', (sid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/sites/<sid>/photos', methods=['POST'])
+def upload_photo(sid):
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    pid, filename = save_photo_file(request.files['photo'], sid)
+    if not pid:
+        return jsonify({'error': filename}), 400
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO photos (id,site_id,visit_id,filename,caption) VALUES (?,?,?,?,?)',
+        (pid, sid, request.form.get('visit_id'), filename, request.form.get('caption', ''))
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM photos WHERE id=?', (pid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+def save_photo_file(f, folder_key):
+    ext = os.path.splitext(secure_filename(f.filename or 'photo.jpg'))[1].lower() or '.jpg'
+    if ext not in ALLOWED_EXT:
+        return None, 'Invalid file type'
+    pid = str(uuid.uuid4())
+    filename = f'{pid}.jpg'
+    photo_dir = os.path.join(PHOTO_DIR, folder_key)
+    thumb_dir = os.path.join(THUMB_DIR, folder_key)
+    os.makedirs(photo_dir, exist_ok=True)
+    os.makedirs(thumb_dir, exist_ok=True)
+    raw = f.read()
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)  # 아이폰 EXIF 회전 방향 보정
+        img = img.convert('RGB')
+        img.save(os.path.join(photo_dir, filename), 'JPEG', quality=85)
+        img.thumbnail((400, 400), Image.LANCZOS)
+        img.save(os.path.join(thumb_dir, filename), 'JPEG', quality=70)
+    except Exception:
+        with open(os.path.join(photo_dir, filename), 'wb') as fh:
+            fh.write(raw)
+    return pid, filename
+
+
+@app.route('/api/photo/<folder>/<filename>')
+def serve_photo(folder, filename):
+    return send_from_directory(os.path.join(PHOTO_DIR, folder), filename)
+
+
+@app.route('/api/thumb/<folder>/<filename>')
+def serve_thumb(folder, filename):
+    thumb_path = os.path.join(THUMB_DIR, folder, filename)
+    if os.path.exists(thumb_path):
+        return send_from_directory(os.path.join(THUMB_DIR, folder), filename)
+    return send_from_directory(os.path.join(PHOTO_DIR, folder), filename)
+
+
+@app.route('/api/photos/<pid>', methods=['DELETE'])
+def delete_photo(pid):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM photos WHERE id=?', (pid,)).fetchone()
+    if row:
+        folder = row['site_id'] or row['schedule_id']
+        if folder:
+            for d in [PHOTO_DIR, THUMB_DIR]:
+                p = os.path.join(d, folder, row['filename'])
+                if os.path.exists(p):
+                    os.remove(p)
+        conn.execute('DELETE FROM photos WHERE id=?', (pid,))
+        conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# ── Schedule Photos ───────────────────────────────────────────────────────────
+
+@app.route('/api/schedules/<scid>/photos', methods=['GET'])
+def get_schedule_photos(scid):
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM photos WHERE schedule_id=? ORDER BY created_at DESC', (scid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/schedules/<scid>/photos', methods=['POST'])
+def upload_schedule_photo(scid):
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    f = request.files['photo']
+    pid, filename = save_photo_file(f, scid)
+    if not pid:
+        return jsonify({'error': filename}), 400
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO photos (id,site_id,schedule_id,filename,caption) VALUES (?,?,?,?,?)',
+        (pid, None, scid, filename, request.form.get('caption', ''))
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM photos WHERE id=?', (pid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+# ── Schedules ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/schedules', methods=['GET'])
+def get_schedules():
+    month = request.args.get('month')
+    conn = get_db()
+    if month:
+        rows = conn.execute('''
+            SELECT sc.*, s.name site_name FROM schedules sc
+            LEFT JOIN sites s ON sc.site_id=s.id
+            WHERE sc.scheduled_date LIKE ?
+            ORDER BY sc.scheduled_date, sc.scheduled_time
+        ''', (f'{month}%',)).fetchall()
+    else:
+        rows = conn.execute('''
+            SELECT sc.*, s.name site_name FROM schedules sc
+            LEFT JOIN sites s ON sc.site_id=s.id
+            ORDER BY sc.scheduled_date, sc.scheduled_time
+        ''').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/schedules', methods=['POST'])
+def create_schedule():
+    d = request.json
+    scid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO schedules (id,site_id,title,scheduled_date,scheduled_time,memo) VALUES (?,?,?,?,?,?)',
+        (scid, d.get('site_id'), d['title'], d['scheduled_date'], d.get('scheduled_time'), d.get('memo'))
+    )
+    conn.commit()
+    row = conn.execute('SELECT sc.*, s.name site_name FROM schedules sc LEFT JOIN sites s ON sc.site_id=s.id WHERE sc.id=?', (scid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/schedules/<scid>', methods=['PUT'])
+def update_schedule(scid):
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE schedules SET site_id=?,title=?,scheduled_date=?,scheduled_time=?,memo=?,status=? WHERE id=?',
+        (d.get('site_id'), d['title'], d['scheduled_date'], d.get('scheduled_time'), d.get('memo'), d.get('status', 'pending'), scid)
+    )
+    conn.commit()
+    row = conn.execute('SELECT sc.*, s.name site_name FROM schedules sc LEFT JOIN sites s ON sc.site_id=s.id WHERE sc.id=?', (scid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route('/api/schedules/<scid>', methods=['DELETE'])
+def delete_schedule(scid):
+    conn = get_db()
+    conn.execute('DELETE FROM schedules WHERE id=?', (scid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/schedules/<scid>/complete', methods=['POST'])
+def complete_schedule(scid):
+    """일정 완료 처리 + 현장이 있으면 방문기록 자동 생성 + 사진 이동"""
+    conn = get_db()
+    sched = conn.execute('SELECT * FROM schedules WHERE id=?', (scid,)).fetchone()
+    if not sched:
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+
+    # 일정 완료 처리
+    conn.execute("UPDATE schedules SET status='completed' WHERE id=?", (scid,))
+
+    visit = None
+    if sched['site_id']:
+        # 이미 이 일정으로 생성된 방문기록이 있으면 재사용 (중복 방지)
+        existing = conn.execute(
+            'SELECT * FROM visits WHERE schedule_id=?', (scid,)
+        ).fetchone()
+        if existing:
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'visit': dict(existing)})
+
+        # 방문기록 자동 생성
+        vid = str(uuid.uuid4())
+        work = sched['title']
+        if sched['memo']:
+            work += '\n' + sched['memo']
+        conn.execute(
+            'INSERT INTO visits (id,site_id,visit_date,work_content,status,schedule_id) VALUES (?,?,?,?,?,?)',
+            (vid, sched['site_id'], sched['scheduled_date'], work, 'completed', scid)
+        )
+
+        # 일정 사진 → 방문기록으로 이동 (파일도 site 폴더로 이동)
+        photos = conn.execute(
+            'SELECT * FROM photos WHERE schedule_id=?', (scid,)
+        ).fetchall()
+
+        for p in photos:
+            old_dir = os.path.join(PHOTO_DIR, scid)
+            new_dir = os.path.join(PHOTO_DIR, sched['site_id'])
+            old_thumb = os.path.join(THUMB_DIR, scid)
+            new_thumb = os.path.join(THUMB_DIR, sched['site_id'])
+            os.makedirs(new_dir, exist_ok=True)
+            os.makedirs(new_thumb, exist_ok=True)
+
+            old_f = os.path.join(old_dir, p['filename'])
+            new_f = os.path.join(new_dir, p['filename'])
+            if os.path.exists(old_f):
+                import shutil
+                shutil.move(old_f, new_f)
+
+            old_t = os.path.join(old_thumb, p['filename'])
+            new_t = os.path.join(new_thumb, p['filename'])
+            if os.path.exists(old_t):
+                import shutil
+                shutil.move(old_t, new_t)
+
+            conn.execute(
+                'UPDATE photos SET site_id=?, visit_id=? WHERE id=?',
+                (sched['site_id'], vid, p['id'])
+            )
+
+        conn.commit()
+        visit = dict(conn.execute('SELECT * FROM visits WHERE id=?', (vid,)).fetchone())
+
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'visit': visit})
+
+
+# ── Search ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/search')
+def search():
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'sites': [], 'visits': []})
+    conn = get_db()
+    sites = conn.execute(
+        'SELECT * FROM sites WHERE name LIKE ? OR address LIKE ? ORDER BY name LIMIT 20',
+        (f'%{q}%', f'%{q}%')
+    ).fetchall()
+    visits = conn.execute('''
+        SELECT v.*, s.name site_name FROM visits v
+        LEFT JOIN sites s ON v.site_id=s.id
+        WHERE v.work_content LIKE ? OR s.name LIKE ? OR v.engineer LIKE ?
+        ORDER BY v.visit_date DESC LIMIT 20
+    ''', (f'%{q}%', f'%{q}%', f'%{q}%')).fetchall()
+    conn.close()
+    return jsonify({'sites': [dict(r) for r in sites], 'visits': [dict(r) for r in visits]})
+
+
+# ── Static ────────────────────────────────────────────────────────────────────
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path and os.path.exists(os.path.join('static', path)):
+        return send_from_directory('static', path)
+    return send_from_directory('static', 'index.html')
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5001))
+
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = '127.0.0.1'
+
+    print('\n' + '='*50)
+    print('  윌로 서비스 관리 시스템')
+    print('='*50)
+    print(f'  PC 접속:     http://localhost:{port}')
+    print(f'  아이폰 접속: http://{local_ip}:{port}')
+    print('  (같은 와이파이에 연결되어 있어야 합니다)')
+    print('='*50 + '\n')
+    app.run(host='0.0.0.0', port=port, debug=False)

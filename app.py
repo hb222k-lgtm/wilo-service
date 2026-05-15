@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageOps
-import sqlite3, os, uuid, io
+import sqlite3, os, uuid, io, json
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -500,6 +500,182 @@ def search():
     ''', (f'%{q}%', f'%{q}%', f'%{q}%')).fetchall()
     conn.close()
     return jsonify({'sites': [dict(r) for r in sites], 'visits': [dict(r) for r in visits]})
+
+
+# ── AI Chat ───────────────────────────────────────────────────────────────────
+
+CHAT_TOOLS = [
+    {
+        "name": "search_sites",
+        "description": "현장 목록을 이름이나 주소로 검색합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "검색할 이름이나 주소 키워드"}
+            },
+            "required": ["query"],
+            "additionalProperties": False
+        }
+    },
+    {
+        "name": "get_recent_visits",
+        "description": "방문 기록을 조회합니다. 특정 현장명을 지정하거나 전체 최근 방문 기록을 볼 수 있습니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "site_name": {"type": "string", "description": "현장 이름 (없으면 전체 최근 방문)"},
+                "limit": {"type": "integer", "description": "최대 조회 수 (기본 10, 최대 30)"}
+            },
+            "additionalProperties": False
+        }
+    },
+    {
+        "name": "get_schedules",
+        "description": "일정을 조회합니다. 특정 월의 일정이나 예정된 일정을 볼 수 있습니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "month": {"type": "string", "description": "조회할 월 (YYYY-MM 형식, 없으면 이번 달)"},
+                "status": {"type": "string", "enum": ["pending", "completed", "all"], "description": "상태 필터"}
+            },
+            "additionalProperties": False
+        }
+    },
+    {
+        "name": "search_records",
+        "description": "현장명, 작업내용, 담당자 등 전체 데이터를 키워드로 검색합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "검색 키워드"}
+            },
+            "required": ["query"],
+            "additionalProperties": False
+        }
+    }
+]
+
+
+def execute_chat_tool(name, params):
+    conn = get_db()
+    try:
+        if name == 'search_sites':
+            q = params.get('query', '')
+            rows = conn.execute(
+                'SELECT id, name, address, contact_name, contact_phone, memo FROM sites WHERE name LIKE ? OR address LIKE ? ORDER BY name LIMIT 20',
+                (f'%{q}%', f'%{q}%')
+            ).fetchall()
+            return {'sites': [dict(r) for r in rows], 'total': len(rows)}
+
+        elif name == 'get_recent_visits':
+            site_name = params.get('site_name', '').strip()
+            limit = min(int(params.get('limit', 10)), 30)
+            if site_name:
+                rows = conn.execute('''
+                    SELECT v.id, v.visit_date, v.work_content, v.engineer, v.status, v.memo, s.name site_name
+                    FROM visits v LEFT JOIN sites s ON v.site_id=s.id
+                    WHERE s.name LIKE ? ORDER BY v.visit_date DESC LIMIT ?
+                ''', (f'%{site_name}%', limit)).fetchall()
+            else:
+                rows = conn.execute('''
+                    SELECT v.id, v.visit_date, v.work_content, v.engineer, v.status, v.memo, s.name site_name
+                    FROM visits v LEFT JOIN sites s ON v.site_id=s.id
+                    ORDER BY v.visit_date DESC LIMIT ?
+                ''', (limit,)).fetchall()
+            return {'visits': [dict(r) for r in rows], 'total': len(rows)}
+
+        elif name == 'get_schedules':
+            month = params.get('month', datetime.now().strftime('%Y-%m'))
+            status = params.get('status', 'all')
+            if status == 'all':
+                rows = conn.execute('''
+                    SELECT sc.id, sc.title, sc.scheduled_date, sc.scheduled_time, sc.status, sc.memo, s.name site_name
+                    FROM schedules sc LEFT JOIN sites s ON sc.site_id=s.id
+                    WHERE sc.scheduled_date LIKE ? ORDER BY sc.scheduled_date, sc.scheduled_time
+                ''', (f'{month}%',)).fetchall()
+            else:
+                rows = conn.execute('''
+                    SELECT sc.id, sc.title, sc.scheduled_date, sc.scheduled_time, sc.status, sc.memo, s.name site_name
+                    FROM schedules sc LEFT JOIN sites s ON sc.site_id=s.id
+                    WHERE sc.scheduled_date LIKE ? AND sc.status=? ORDER BY sc.scheduled_date, sc.scheduled_time
+                ''', (f'{month}%', status)).fetchall()
+            return {'schedules': [dict(r) for r in rows], 'month': month, 'total': len(rows)}
+
+        elif name == 'search_records':
+            q = params.get('query', '')
+            sites = conn.execute(
+                'SELECT id, name, address FROM sites WHERE name LIKE ? OR address LIKE ? LIMIT 10',
+                (f'%{q}%', f'%{q}%')
+            ).fetchall()
+            visits = conn.execute('''
+                SELECT v.visit_date, v.work_content, v.engineer, s.name site_name
+                FROM visits v LEFT JOIN sites s ON v.site_id=s.id
+                WHERE v.work_content LIKE ? OR s.name LIKE ? OR v.engineer LIKE ? OR v.memo LIKE ?
+                ORDER BY v.visit_date DESC LIMIT 20
+            ''', (f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%')).fetchall()
+            return {'sites': [dict(r) for r in sites], 'visits': [dict(r) for r in visits]}
+
+        return {'error': f'Unknown tool: {name}'}
+    finally:
+        conn.close()
+
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    if not os.environ.get('ANTHROPIC_API_KEY'):
+        return jsonify({'error': 'ANTHROPIC_API_KEY가 설정되지 않았습니다. 환경변수를 설정하세요.'}), 503
+
+    try:
+        import anthropic
+    except ImportError:
+        return jsonify({'error': 'anthropic 패키지가 설치되지 않았습니다.'}), 503
+
+    data = request.json or {}
+    user_messages = data.get('messages', [])
+
+    client = anthropic.Anthropic()
+    today = datetime.now().strftime('%Y년 %m월 %d일')
+    system = f"""당신은 윌로 서비스 관리 시스템의 AI 비서입니다.
+펌프·설비 서비스 업체의 현장 방문 기록, 일정 관리, 업무 정보를 도와드립니다.
+오늘 날짜: {today}
+
+데이터베이스 조회 도구를 활용하여 실제 데이터에 기반한 답변을 제공하세요.
+한국어로 친절하고 간결하게 응답하세요. 데이터가 없으면 솔직히 말씀드리세요."""
+
+    messages = [{'role': m['role'], 'content': m['content']} for m in user_messages]
+
+    for _ in range(6):
+        try:
+            response = client.messages.create(
+                model='claude-haiku-4-5',
+                max_tokens=2048,
+                system=system,
+                tools=CHAT_TOOLS,
+                messages=messages
+            )
+        except Exception as e:
+            return jsonify({'error': f'AI 요청 실패: {str(e)}'}), 500
+
+        if response.stop_reason == 'end_turn':
+            text = next((b.text for b in response.content if b.type == 'text'), '')
+            return jsonify({'response': text})
+
+        if response.stop_reason == 'tool_use':
+            messages.append({'role': 'assistant', 'content': response.content})
+            tool_results = []
+            for block in response.content:
+                if block.type == 'tool_use':
+                    result = execute_chat_tool(block.name, block.input)
+                    tool_results.append({
+                        'type': 'tool_result',
+                        'tool_use_id': block.id,
+                        'content': json.dumps(result, ensure_ascii=False, default=str)
+                    })
+            messages.append({'role': 'user', 'content': tool_results})
+        else:
+            break
+
+    return jsonify({'error': '응답을 생성할 수 없습니다.'}), 500
 
 
 # ── Static ────────────────────────────────────────────────────────────────────

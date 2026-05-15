@@ -2,3 +2,4 @@ flask
 flask-cors
 pillow
 gunicorn
+anthropic

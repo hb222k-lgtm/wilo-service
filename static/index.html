@@ -200,6 +200,25 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
   box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .stat-card .num{font-size:28px;font-weight:700;color:var(--primary)}
 .stat-card .label{font-size:12px;color:var(--sub);margin-top:2px}
+
+/* AI Chat */
+.chat-msg{display:flex;padding:4px 16px;gap:8px}
+.chat-msg.user{flex-direction:row-reverse}
+.chat-bubble{max-width:75%;padding:10px 14px;border-radius:18px;font-size:15px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.chat-msg.ai .chat-bubble{background:var(--card);border:1px solid var(--border);border-radius:18px 18px 18px 4px}
+.chat-msg.user .chat-bubble{background:var(--primary);color:#fff;border-radius:18px 18px 4px 18px}
+.chat-time{font-size:11px;color:var(--sub);margin-top:2px;text-align:center}
+.chat-thinking{display:flex;align-items:center;gap:6px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:18px;font-size:14px;color:var(--sub);max-width:120px}
+.chat-thinking span{width:6px;height:6px;border-radius:50%;background:var(--sub);animation:blink 1.2s infinite}
+.chat-thinking span:nth-child(2){animation-delay:.2s}
+.chat-thinking span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}
+#chat-input-bar{display:none;position:fixed;bottom:var(--nav-h);left:0;right:0;z-index:150;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);border-top:1px solid var(--border);padding:8px 12px;gap:8px;align-items:flex-end}
+#chat-input-bar.show{display:flex}
+#chat-input{flex:1;border:1px solid var(--border);border-radius:20px;padding:8px 14px;font-size:15px;font-family:inherit;resize:none;outline:none;max-height:120px;overflow-y:auto;line-height:1.4;background:var(--bg)}
+#chat-input:focus{border-color:var(--primary)}
+#chat-send{width:36px;height:36px;border-radius:50%;background:var(--primary);border:none;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+#chat-send:active{opacity:.7}
 </style>
 </head>
 <body>
@@ -263,6 +282,21 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
       </div>
       <div id="search-results"></div>
     </div>
+
+    <!-- ── AI 비서 ── -->
+    <div id="page-ai" class="page">
+      <div class="topbar">
+        <h1>AI 비서</h1>
+        <button class="btn-icon" style="background:var(--bg);color:var(--sub);font-size:13px;font-weight:600" onclick="Chat.clear()">초기화</button>
+      </div>
+      <div id="chat-messages" style="padding:8px 0 80px"></div>
+    </div>
+  </div>
+
+  <!-- Chat input bar -->
+  <div id="chat-input-bar">
+    <textarea id="chat-input" rows="1" placeholder="메시지를 입력하세요…" oninput="Chat.autoResize(this)" onkeydown="Chat.handleKey(event)"></textarea>
+    <button id="chat-send" onclick="Chat.send()">↑</button>
   </div>
 
   <!-- Bottom Nav -->
@@ -282,6 +316,10 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
     <button class="nav-btn" data-page="search" onclick="App.navigate('search')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       검색
+    </button>
+    <button class="nav-btn" data-page="ai" onclick="App.navigate('ai')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 1 8 8c0 3-1.5 5.5-4 7l-1 3H9l-1-3C5.5 15.5 4 13 4 10a8 8 0 0 1 8-8z"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+      AI비서
     </button>
   </nav>
 </div>
@@ -539,6 +577,15 @@ const App = {
     else if(page === 'detail' && siteId) this.renderDetail(siteId);
     else if(page === 'schedule') this.renderSchedule();
     else if(page === 'search') document.getElementById('global-search').focus();
+    else if(page === 'ai') Chat.init();
+
+    const bar = document.getElementById('chat-input-bar');
+    if(page === 'ai') {
+      bar.classList.add('show');
+      setTimeout(() => document.getElementById('chat-input')?.focus(), 100);
+    } else {
+      bar.classList.remove('show');
+    }
 
     window.scrollTo(0,0);
     document.getElementById('content').scrollTop = 0;
@@ -1381,6 +1428,122 @@ window.addEventListener('online', () => {
   if(Queue.count()) App.syncQueue();
 });
 window.addEventListener('offline', () => App.setOffline(true));
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+const Chat = {
+  history: [],
+  loading: false,
+
+  init() {
+    try { this.history = JSON.parse(localStorage.getItem('wilo_chat') || '[]'); } catch(e) { this.history = []; }
+    this.render();
+  },
+
+  save() {
+    localStorage.setItem('wilo_chat', JSON.stringify(this.history.slice(-50)));
+  },
+
+  render() {
+    const el = document.getElementById('chat-messages');
+    if(!el) return;
+    if(!this.history.length) {
+      el.innerHTML = `<div class="empty" style="padding:48px 24px">
+        <div class="icon">🤖</div>
+        <p>안녕하세요! 윌로 서비스 AI 비서입니다.<br>현장, 방문 기록, 일정 등을 물어보세요.</p>
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+          ${['이번 달 일정 알려줘', '최근 방문 기록 보여줘', '강남 현장 정보 알려줘'].map(q =>
+            `<button onclick="Chat.quickSend('${q}')" class="btn btn-outline" style="font-size:14px;padding:10px">${q}</button>`
+          ).join('')}
+        </div>
+      </div>`;
+      return;
+    }
+    let html = '';
+    this.history.forEach(msg => {
+      const isUser = msg.role === 'user';
+      const time = msg.time ? new Date(msg.time).toLocaleTimeString('ko', {hour:'2-digit',minute:'2-digit'}) : '';
+      html += `<div class="chat-msg ${isUser ? 'user' : 'ai'}" style="margin-bottom:4px">
+        <div>
+          <div class="chat-bubble">${isUser ? esc(msg.content) : this.renderMarkdown(msg.content)}</div>
+          ${time ? `<div class="chat-time">${time}</div>` : ''}
+        </div>
+      </div>`;
+    });
+    el.innerHTML = html;
+    setTimeout(() => { el.lastElementChild?.scrollIntoView({behavior:'smooth'}); }, 50);
+  },
+
+  renderMarkdown(text) {
+    return esc(text)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code style="background:var(--bg);padding:1px 4px;border-radius:4px;font-size:13px">$1</code>')
+      .replace(/\n/g, '<br>');
+  },
+
+  showThinking() {
+    const el = document.getElementById('chat-messages');
+    if(!el) return;
+    const div = document.createElement('div');
+    div.id = 'chat-thinking-indicator';
+    div.className = 'chat-msg ai';
+    div.style.marginBottom = '4px';
+    div.innerHTML = '<div class="chat-thinking"><span></span><span></span><span></span></div>';
+    el.appendChild(div);
+    div.scrollIntoView({behavior:'smooth'});
+  },
+
+  hideThinking() { document.getElementById('chat-thinking-indicator')?.remove(); },
+
+  async send() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if(!text || this.loading) return;
+    input.value = '';
+    this.autoResize(input);
+    this.history.push({role:'user', content:text, time:Date.now()});
+    this.save();
+    this.render();
+    this.showThinking();
+    this.loading = true;
+    try {
+      const res = await fetch('/api/chat', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          messages: this.history.filter(m => m.role==='user' || m.role==='assistant')
+                                .map(m => ({role:m.role, content:m.content}))
+        })
+      });
+      const data = await res.json();
+      this.hideThinking();
+      if(data.error) {
+        this.history.push({role:'assistant', content:`⚠️ ${data.error}`, time:Date.now()});
+      } else {
+        this.history.push({role:'assistant', content:data.response, time:Date.now()});
+      }
+    } catch(e) {
+      this.hideThinking();
+      this.history.push({role:'assistant', content:'⚠️ 네트워크 오류가 발생했습니다.', time:Date.now()});
+    }
+    this.loading = false;
+    this.save();
+    this.render();
+  },
+
+  quickSend(text) { document.getElementById('chat-input').value = text; this.send(); },
+
+  clear() {
+    if(!this.history.length) return;
+    if(!confirm('대화를 초기화할까요?')) return;
+    this.history = [];
+    localStorage.removeItem('wilo_chat');
+    this.render();
+  },
+
+  autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; },
+  handleKey(e) { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } }
+};
 
 // ── Init ──────────────────────────────────────────────────────────────────
 App.renderHome();

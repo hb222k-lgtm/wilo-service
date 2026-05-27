@@ -375,7 +375,13 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
             overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sched-tbd" onchange="App.toggleTbd()" style="width:18px;height:18px;cursor:pointer">
+          <span>날짜 미정 (방문 요청만 기록)</span>
+        </label>
+      </div>
+      <div id="sched-date-row" class="form-row">
         <div class="form-group"><label>날짜 *</label><input type="date" id="sched-date"></div>
         <div class="form-group"><label>시간</label><input type="time" id="sched-time"></div>
       </div>
@@ -563,6 +569,7 @@ const App = {
     const todayPending   = schedules.filter(s => s.scheduled_date === TODAY && s.status !== 'completed');
     const todayDone      = schedules.filter(s => s.scheduled_date === TODAY && s.status === 'completed');
     const upcomingScheds = schedules.filter(s => s.scheduled_date > TODAY && s.status !== 'completed').slice(0, 5);
+    const waitingReqs    = schedules.filter(s => !s.scheduled_date && s.status !== 'completed');
     const recentVisits   = visits.slice(0, 5);
     const isOffline      = this.offline;
 
@@ -578,7 +585,7 @@ const App = {
     html += `<div class="stats-row">
       <div class="stat-card"><div class="num">${sites.length}</div><div class="label">전체 현장</div></div>
       <div class="stat-card"><div class="num">${todayPending.length}</div><div class="label">오늘 남은</div></div>
-      <div class="stat-card"><div class="num">${todayDone.length}</div><div class="label">오늘 완료</div></div>
+      <div class="stat-card"><div class="num">${waitingReqs.length}</div><div class="label">대기 요청</div></div>
     </div>`;
 
     if(todayPending.length) {
@@ -607,6 +614,24 @@ const App = {
           <div class="sched-info">
             <div class="title">${esc(s.title)}</div>
             <div class="site">${fmtDate(s.scheduled_date)} ${s.scheduled_time||''} ${s.site_name ? '| '+esc(s.site_name) : ''}</div>
+          </div>
+        </div>`;
+      });
+    }
+
+    if(waitingReqs.length) {
+      html += `<div class="section-label">📋 대기 요청 (날짜 미정)</div>`;
+      waitingReqs.forEach(s => {
+        html += `<div class="sched-item" style="margin:0 16px 8px;border-left:3px solid var(--warn)">
+          <div class="sched-dot" style="background:var(--warn)"></div>
+          <div class="sched-info">
+            <div class="title">${esc(s.title)}</div>
+            ${s.site_name ? `<div class="site">📍 ${esc(s.site_name)}</div>` : ''}
+            ${s.memo ? `<div class="site">${esc(s.memo)}</div>` : ''}
+          </div>
+          <div class="sched-actions">
+            <button class="btn btn-sm badge-blue" onclick="App.scheduleRequest('${s.id}')">일정 잡기</button>
+            <button class="btn btn-sm btn-outline" onclick="App.deleteSchedule('${s.id}')">삭제</button>
           </div>
         </div>`;
       });
@@ -1143,6 +1168,35 @@ const App = {
     this._schedPendingPhotos = [];
   },
 
+  async scheduleRequest(id) {
+    // 대기 요청을 일정 편집 모달로 열어서 날짜 지정
+    const sites = this.sites.length ? this.sites : await API.get('/sites').catch(()=>[]);
+    this.sites = sites;
+    const s = this.schedules.find(x=>x.id===id);
+    if(!s) return;
+    document.getElementById('modal-sched-title').textContent = '일정 날짜 지정';
+    document.getElementById('sched-id').value = s.id;
+    document.getElementById('sched-title').value = s.title;
+    document.getElementById('sched-date').value = TODAY;
+    document.getElementById('sched-time').value = '';
+    document.getElementById('sched-memo').value = s.memo||'';
+    document.getElementById('sched-tbd').checked = false;
+    document.getElementById('sched-date-row').style.display = 'grid';
+    this._setSiteSearch(s.site_id || '');
+    this._resetSchedModal();
+    this.openModal('modal-schedule');
+    setTimeout(() => document.getElementById('sched-date').focus(), 100);
+  },
+
+  toggleTbd() {
+    const tbd = document.getElementById('sched-tbd').checked;
+    document.getElementById('sched-date-row').style.display = tbd ? 'none' : 'grid';
+    if(tbd) {
+      document.getElementById('sched-date').value = '';
+      document.getElementById('sched-time').value = '';
+    }
+  },
+
   _setSiteSearch(siteId) {
     const site = this.sites.find(s=>s.id===siteId);
     document.getElementById('sched-site').value = siteId || '';
@@ -1196,6 +1250,8 @@ const App = {
     document.getElementById('sched-date').value = this.calSelected || TODAY;
     document.getElementById('sched-time').value = '';
     document.getElementById('sched-memo').value = '';
+    document.getElementById('sched-tbd').checked = false;
+    document.getElementById('sched-date-row').style.display = 'grid';
     this._setSiteSearch('');
     this._resetSchedModal();
     this.openModal('modal-schedule');
@@ -1210,9 +1266,12 @@ const App = {
     document.getElementById('modal-sched-title').textContent = '일정 편집';
     document.getElementById('sched-id').value = s.id;
     document.getElementById('sched-title').value = s.title;
-    document.getElementById('sched-date').value = s.scheduled_date;
+    document.getElementById('sched-date').value = s.scheduled_date || '';
     document.getElementById('sched-time').value = s.scheduled_time||'';
     document.getElementById('sched-memo').value = s.memo||'';
+    const isTbd = !s.scheduled_date;
+    document.getElementById('sched-tbd').checked = isTbd;
+    document.getElementById('sched-date-row').style.display = isTbd ? 'none' : 'grid';
     this._setSiteSearch(s.site_id || '');
     this._resetSchedModal();
     this.openModal('modal-schedule');
@@ -1222,12 +1281,13 @@ const App = {
     const id = document.getElementById('sched-id').value;
     const title = document.getElementById('sched-title').value.trim();
     const date = document.getElementById('sched-date').value;
+    const tbd = document.getElementById('sched-tbd').checked;
     if(!title) { alert('제목을 입력하세요'); return; }
-    if(!date) { alert('날짜를 입력하세요'); return; }
+    if(!tbd && !date) { alert('날짜를 입력하거나 "날짜 미정"을 체크하세요'); return; }
     // 편집 시 원래 status 유지 (완료된 일정이 'pending'으로 리셋되는 버그 방지)
     const origStatus = id ? ((this.schedules.find(s=>s.id===id)||{}).status || 'pending') : 'pending';
     const data = {
-      title, scheduled_date: date,
+      title, scheduled_date: tbd ? null : date,
       site_id: document.getElementById('sched-site').value || null,
       scheduled_time: document.getElementById('sched-time').value || null,
       memo: document.getElementById('sched-memo').value,

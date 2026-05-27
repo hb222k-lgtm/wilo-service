@@ -358,7 +358,7 @@ def get_schedules():
         rows = conn.execute('''
             SELECT sc.*, s.name site_name FROM schedules sc
             LEFT JOIN sites s ON sc.site_id=s.id
-            WHERE sc.scheduled_date LIKE ?
+            WHERE sc.scheduled_date LIKE ? OR sc.scheduled_date IS NULL
             ORDER BY sc.scheduled_date, sc.scheduled_time
         ''', (f'{month}%',)).fetchall()
     else:
@@ -374,11 +374,13 @@ def get_schedules():
 @app.route('/api/schedules', methods=['POST'])
 def create_schedule():
     d = request.json
+    if not d.get('title', '').strip():
+        return jsonify({'error': '제목을 입력하세요'}), 400
     scid = str(uuid.uuid4())
     conn = get_db()
     conn.execute(
         'INSERT INTO schedules (id,site_id,title,scheduled_date,scheduled_time,memo) VALUES (?,?,?,?,?,?)',
-        (scid, d.get('site_id'), d['title'], d['scheduled_date'], d.get('scheduled_time'), d.get('memo'))
+        (scid, d.get('site_id'), d['title'], d.get('scheduled_date') or None, d.get('scheduled_time'), d.get('memo'))
     )
     conn.commit()
     row = conn.execute('SELECT sc.*, s.name site_name FROM schedules sc LEFT JOIN sites s ON sc.site_id=s.id WHERE sc.id=?', (scid,)).fetchone()

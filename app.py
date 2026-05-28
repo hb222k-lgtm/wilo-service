@@ -353,8 +353,17 @@ def upload_schedule_photo(scid):
 @app.route('/api/schedules', methods=['GET'])
 def get_schedules():
     month = request.args.get('month')
+    pending_only = request.args.get('pending') == '1'
     conn = get_db()
-    if month:
+    if pending_only:
+        # 완료되지 않은 모든 일정 (날짜 무관)
+        rows = conn.execute('''
+            SELECT sc.*, s.name site_name FROM schedules sc
+            LEFT JOIN sites s ON sc.site_id=s.id
+            WHERE sc.status != 'completed'
+            ORDER BY sc.scheduled_date, sc.scheduled_time
+        ''').fetchall()
+    elif month:
         rows = conn.execute('''
             SELECT sc.*, s.name site_name FROM schedules sc
             LEFT JOIN sites s ON sc.site_id=s.id

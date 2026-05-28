@@ -556,20 +556,22 @@ const App = {
     el.innerHTML = `<div class="empty" style="padding:32px"><p style="color:var(--sub)">불러오는 중...</p></div>`;
 
     // 각 섹션을 독립적으로 로드 — 하나 실패해도 나머지는 표시
-    const [schedules, visits, sites] = await Promise.all([
-      API.get('/schedules?month=' + TODAY.slice(0,7)).catch(() => []),
+    const [allPending, visits, sites] = await Promise.all([
+      API.get('/schedules?pending=1').catch(() => []),
       API.get('/visits').catch(() => []),
       API.get('/sites').catch(() => []),
     ]);
 
     // 홈에서도 완료/삭제 버튼이 동작하도록 캐시 저장
-    if(schedules.length || !this.schedules.length) this.schedules = schedules;
+    if(allPending.length || !this.schedules.length) this.schedules = allPending;
     if(sites.length) this.sites = sites;
 
-    const todayPending   = schedules.filter(s => s.scheduled_date === TODAY && s.status !== 'completed');
-    const todayDone      = schedules.filter(s => s.scheduled_date === TODAY && s.status === 'completed');
-    const upcomingScheds = schedules.filter(s => s.scheduled_date > TODAY && s.status !== 'completed').slice(0, 5);
-    const waitingReqs    = schedules.filter(s => !s.scheduled_date && s.status !== 'completed');
+    const schedules      = allPending;
+    const todayPending   = schedules.filter(s => s.scheduled_date === TODAY);
+    const overdue        = schedules.filter(s => s.scheduled_date && s.scheduled_date < TODAY).sort((a,b) => a.scheduled_date > b.scheduled_date ? -1 : 1);
+    const upcomingScheds = schedules.filter(s => s.scheduled_date > TODAY).slice(0, 5);
+    const waitingReqs    = schedules.filter(s => !s.scheduled_date);
+    const todayDone      = []; // pending=1 이므로 완료는 없음
     const recentVisits   = visits.slice(0, 5);
     const isOffline      = this.offline;
 
@@ -585,7 +587,7 @@ const App = {
     html += `<div class="stats-row">
       <div class="stat-card"><div class="num">${sites.length}</div><div class="label">전체 현장</div></div>
       <div class="stat-card"><div class="num">${todayPending.length}</div><div class="label">오늘 남은</div></div>
-      <div class="stat-card"><div class="num">${waitingReqs.length}</div><div class="label">대기 요청</div></div>
+      <div class="stat-card" style="${overdue.length?'color:var(--danger)':''}"><div class="num">${overdue.length}</div><div class="label">미완료</div></div>
     </div>`;
 
     if(todayPending.length) {
@@ -601,6 +603,24 @@ const App = {
           <div class="sched-actions">
             <button class="btn btn-sm badge-green" onclick="App.completeSchedule('${s.id}')">완료</button>
             <button class="btn btn-sm btn-outline" onclick="App.deleteSchedule('${s.id}')">삭제</button>
+          </div>
+        </div>`;
+      });
+    }
+
+    if(overdue.length) {
+      html += `<div class="section-label" style="color:var(--danger)">⚠️ 미완료 지난 일정 (${overdue.length}건)</div>`;
+      overdue.forEach(s => {
+        html += `<div class="sched-item" style="margin:0 16px 8px;border-left:3px solid var(--danger)">
+          <div class="sched-dot" style="background:var(--danger)"></div>
+          <div class="sched-info">
+            <div class="title">${esc(s.title)}</div>
+            <div class="site" style="color:var(--danger)">${fmtDate(s.scheduled_date)} ${s.site_name ? '| 📍'+esc(s.site_name) : ''}</div>
+            ${s.memo ? `<div class="site">${esc(s.memo)}</div>` : ''}
+          </div>
+          <div class="sched-actions">
+            <button class="btn btn-sm badge-green" onclick="App.completeSchedule('${s.id}')">완료</button>
+            <button class="btn btn-sm btn-outline" onclick="App.editSchedule('${s.id}')">편집</button>
           </div>
         </div>`;
       });

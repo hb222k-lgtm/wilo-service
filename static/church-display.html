@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>교회 자막 디스플레이</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --font:'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif;
+}
+html,body{
+  height:100%;background:#000;color:#fff;
+  font-family:var(--font);overflow:hidden;
+  user-select:none;-webkit-user-select:none;
+}
+
+/* ── Main display area ── */
+#display{
+  width:100vw;height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:60px 80px;
+  position:relative;
+}
+
+#title-area{
+  font-size:clamp(18px, 2.5vw, 36px);
+  color:#aaa;
+  text-align:center;
+  margin-bottom:20px;
+  font-weight:400;
+  opacity:0;
+  transition:opacity .5s ease;
+  letter-spacing:.05em;
+  min-height:1em;
+}
+
+#text-area{
+  font-size:clamp(36px, 5.5vw, 96px);
+  color:#fff;
+  text-align:center;
+  line-height:1.55;
+  font-weight:700;
+  white-space:pre-wrap;
+  word-break:keep-all;
+  text-shadow:0 2px 20px rgba(0,0,0,.8), 0 0 60px rgba(0,0,0,.5);
+  opacity:0;
+  transition:opacity .5s ease;
+  letter-spacing:.02em;
+}
+
+#display.visible #title-area,
+#display.visible #text-area{
+  opacity:1;
+}
+
+/* ── Status bar (hidden by default, shown on hover) ── */
+#statusbar{
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(0,0,0,.85);
+  backdrop-filter:blur(10px);
+  padding:10px 24px;
+  display:flex;align-items:center;gap:16px;
+  font-size:13px;color:#888;
+  opacity:0;transition:opacity .3s;
+  pointer-events:none;
+}
+body:hover #statusbar{opacity:1;pointer-events:all}
+#statusbar .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;
+  animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#statusbar .dot.off{background:#ef4444;animation:none}
+#statusbar .current-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#statusbar a{color:#60a5fa;text-decoration:none;font-size:12px}
+#statusbar a:hover{color:#93c5fd}
+
+/* ── Full screen hint ── */
+#fullscreen-hint{
+  position:fixed;top:16px;right:16px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:8px;padding:6px 12px;
+  font-size:12px;color:#aaa;cursor:pointer;
+  opacity:0;transition:opacity .3s;
+}
+body:hover #fullscreen-hint{opacity:1}
+#fullscreen-hint:hover{background:rgba(255,255,255,.2)}
+</style>
+</head>
+<body>
+
+<div id="display">
+  <div id="title-area"></div>
+  <div id="text-area"></div>
+</div>
+
+<div id="statusbar">
+  <div class="dot off" id="status-dot"></div>
+  <div class="current-label" id="status-label">대기중 — 컨트롤러에서 찬양을 선택하세요</div>
+  <a href="/church/" target="_blank">컨트롤러 열기</a>
+</div>
+
+<div id="fullscreen-hint" onclick="toggleFullscreen()">⛶ 전체화면 (F11)</div>
+
+<script>
+let lastUpdated = 0;
+let currentType = 'blank';
+
+function setContent(data) {
+  const display = document.getElementById('display');
+  const titleEl = document.getElementById('title-area');
+  const textEl = document.getElementById('text-area');
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+
+  if(data.type === 'blank') {
+    display.classList.remove('visible');
+    dot.classList.add('off');
+    label.textContent = '대기중 — 화면 꺼짐';
+    currentType = 'blank';
+    return;
+  }
+
+  // Fade out → update → fade in
+  display.classList.remove('visible');
+  setTimeout(() => {
+    titleEl.textContent = data.title || '';
+    textEl.textContent = data.text || '';
+    display.classList.add('visible');
+    dot.classList.remove('off');
+
+    const typeLabel = data.type === 'song' ? '🎵 찬양' : '📢 텍스트';
+    label.textContent = `${typeLabel}: ${data.title || data.text || ''}`;
+    currentType = data.type;
+  }, data.type === currentType ? 0 : 400);
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/church/display');
+    if(!r.ok) return;
+    const data = await r.json();
+    if(data.updated_at !== lastUpdated) {
+      lastUpdated = data.updated_at;
+      setContent(data);
+    }
+  } catch(e) {}
+}
+
+function toggleFullscreen() {
+  if(!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'F11' || (e.key === 'f' && !e.ctrlKey && !e.altKey)) {
+    e.preventDefault();
+    toggleFullscreen();
+  }
+});
+
+// Initial load
+poll();
+// Poll every 500ms for near-real-time updates
+setInterval(poll, 500);
+</script>
+</body>
+</html>

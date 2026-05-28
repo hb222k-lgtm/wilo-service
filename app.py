@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageOps
-import sqlite3, os, uuid, io
+import sqlite3, os, uuid, io, json, time
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -79,7 +79,120 @@ def init_db():
 
 init_db()
 
-# 기존 DB 마이그레이션
+# ── Church subtitle DB ────────────────────────────────────────────────────────
+
+_church_display = {'type': 'blank', 'title': '', 'text': '', 'updated_at': 0}
+
+
+def init_church_db():
+    conn = get_db()
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS church_songs (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            number TEXT DEFAULT '',
+            verses TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+
+init_church_db()
+
+
+# ── Church routes ─────────────────────────────────────────────────────────────
+
+@app.route('/church')
+@app.route('/church/')
+def church_controller():
+    return send_from_directory('static', 'church.html')
+
+
+@app.route('/church/display')
+def church_display_page():
+    return send_from_directory('static', 'church-display.html')
+
+
+@app.route('/api/church/songs', methods=['GET'])
+def get_church_songs():
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM church_songs ORDER BY CAST(NULLIF(number,"") AS INTEGER), title'
+    ).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['verses'] = json.loads(d['verses'])
+        result.append(d)
+    return jsonify(result)
+
+
+@app.route('/api/church/songs', methods=['POST'])
+def create_church_song():
+    d = request.json
+    if not d.get('title', '').strip():
+        return jsonify({'error': '제목을 입력하세요'}), 400
+    sid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO church_songs (id,title,number,verses) VALUES (?,?,?,?)',
+        (sid, d['title'].strip(), d.get('number', ''), json.dumps(d.get('verses', [])))
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM church_songs WHERE id=?', (sid,)).fetchone()
+    conn.close()
+    result = dict(row)
+    result['verses'] = json.loads(result['verses'])
+    return jsonify(result), 201
+
+
+@app.route('/api/church/songs/<sid>', methods=['PUT'])
+def update_church_song(sid):
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE church_songs SET title=?,number=?,verses=? WHERE id=?',
+        (d['title'].strip(), d.get('number', ''), json.dumps(d.get('verses', [])), sid)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM church_songs WHERE id=?', (sid,)).fetchone()
+    conn.close()
+    result = dict(row)
+    result['verses'] = json.loads(result['verses'])
+    return jsonify(result)
+
+
+@app.route('/api/church/songs/<sid>', methods=['DELETE'])
+def delete_church_song(sid):
+    conn = get_db()
+    conn.execute('DELETE FROM church_songs WHERE id=?', (sid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/church/display', methods=['GET'])
+def get_church_display():
+    return jsonify(_church_display)
+
+
+@app.route('/api/church/display', methods=['POST'])
+def set_church_display():
+    global _church_display
+    d = request.json
+    _church_display = {
+        'type': d.get('type', 'blank'),
+        'title': d.get('title', ''),
+        'text': d.get('text', ''),
+        'updated_at': time.time()
+    }
+    return jsonify(_church_display)
+
+
+# ── 기존 DB 마이그레이션
 def migrate_db():
     conn = get_db()
     photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]

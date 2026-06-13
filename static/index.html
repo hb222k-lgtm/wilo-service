@@ -166,6 +166,16 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
   font-size:14px;z-index:800;opacity:0;transition:all .3s;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* Memo cards */
+.memo-card{background:var(--card);border-radius:12px;margin:8px 16px;padding:14px 16px;
+  box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;position:relative}
+.memo-card:active{opacity:.85}
+.memo-card .memo-title{font-size:15px;font-weight:600;margin-bottom:4px}
+.memo-card .memo-body{font-size:13px;color:var(--sub);white-space:pre-wrap;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.memo-card .memo-date{font-size:12px;color:var(--sub);margin-top:6px}
+.memo-card .memo-actions{display:flex;gap:8px;margin-top:10px;border-top:1px solid var(--border);padding-top:10px}
+
 /* Offline banner */
 #offline-banner{display:none;background:var(--warn);color:#fff;text-align:center;
   padding:6px;font-size:13px;font-weight:600}
@@ -253,6 +263,14 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
     </div>
 
     <!-- ── SEARCH ── -->
+    <div id="page-memo" class="page">
+      <div class="topbar">
+        <h1>메모</h1>
+        <button class="btn-icon" onclick="App.showAddMemo()">+</button>
+      </div>
+      <div id="memo-list"></div>
+    </div>
+
     <div id="page-search" class="page">
       <div class="topbar"><h1>검색</h1></div>
       <div class="search-wrap">
@@ -279,11 +297,31 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       일정
     </button>
+    <button class="nav-btn" data-page="memo" onclick="App.navigate('memo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+      메모
+    </button>
     <button class="nav-btn" data-page="search" onclick="App.navigate('search')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       검색
     </button>
   </nav>
+</div>
+
+<!-- Memo Modal -->
+<div class="modal-bg" id="modal-memo">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-memo-title">메모 추가</h2>
+      <button class="modal-close" onclick="App.closeModal('modal-memo')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="memo-id">
+      <div class="form-group"><label>제목 *</label><input type="text" id="memo-title" placeholder="메모 제목"></div>
+      <div class="form-group"><label>내용</label><textarea id="memo-content" placeholder="자유롭게 메모하세요..." style="min-height:160px"></textarea></div>
+      <button class="btn btn-primary" onclick="App.saveMemo()">저장</button>
+    </div>
+  </div>
 </div>
 
 <!-- Lightbox -->
@@ -544,6 +582,7 @@ const App = {
     else if(page === 'sites') this.renderSites();
     else if(page === 'detail' && siteId) this.renderDetail(siteId);
     else if(page === 'schedule') this.renderSchedule();
+    else if(page === 'memo') this.renderMemo();
     else if(page === 'search') document.getElementById('global-search').focus();
 
     window.scrollTo(0,0);
@@ -1338,6 +1377,14 @@ const App = {
       this.toast(id ? '일정이 수정됐습니다' : '일정이 추가됐습니다');
       this._schedPendingPhotos = [];
       this.closeModal('modal-schedule');
+      // 메모 → 일정 전환 시 원본 메모 삭제 여부
+      if(!id && this._pendingDeleteMemoId) {
+        const memoId = this._pendingDeleteMemoId;
+        this._pendingDeleteMemoId = null;
+        if(confirm('원본 메모도 삭제할까요?')) {
+          await API.del('/memos/'+memoId).catch(()=>{});
+        }
+      }
       if(this.currentPage==='schedule') {
         this.calSelected = date;
         this.calYear = parseInt(date.slice(0,4));
@@ -1369,6 +1416,99 @@ const App = {
     } catch(e) { this.toast('삭제 실패','warn'); }
   },
 
+  // ── MEMO ──────────────────────────────────────────────────────────────
+  async renderMemo() {
+    const el = document.getElementById('memo-list');
+    try {
+      const memos = await API.get('/memos');
+      if(!memos.length) {
+        el.innerHTML = `<div class="empty"><div class="icon">📝</div><p>메모가 없습니다<br>오른쪽 상단 + 버튼으로 메모를 추가하세요</p></div>`;
+        return;
+      }
+      el.innerHTML = memos.map(m => `
+        <div class="memo-card" onclick="App.editMemo('${m.id}')">
+          <div class="memo-title">${esc(m.title)}</div>
+          ${m.content ? `<div class="memo-body">${esc(m.content)}</div>` : ''}
+          <div class="memo-date">${fmtDatetime(m.updated_at)}</div>
+          <div class="memo-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-sm badge-blue" onclick="App.memoToSchedule('${m.id}')">📅 일정으로</button>
+            <button class="btn btn-sm btn-outline" onclick="App.editMemo('${m.id}')">편집</button>
+            <button class="btn btn-sm" style="background:#ffe3e3;color:#c0001a" onclick="App.deleteMemo('${m.id}')">삭제</button>
+          </div>
+        </div>`).join('');
+    } catch(e) {
+      el.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>메모를 불러올 수 없습니다</p></div>`;
+    }
+  },
+
+  showAddMemo() {
+    document.getElementById('modal-memo-title').textContent = '메모 추가';
+    document.getElementById('memo-id').value = '';
+    document.getElementById('memo-title').value = '';
+    document.getElementById('memo-content').value = '';
+    this.openModal('modal-memo');
+    setTimeout(() => document.getElementById('memo-title').focus(), 100);
+  },
+
+  async editMemo(id) {
+    try {
+      const memos = await API.get('/memos');
+      const m = memos.find(x => x.id === id);
+      if(!m) return;
+      document.getElementById('modal-memo-title').textContent = '메모 편집';
+      document.getElementById('memo-id').value = m.id;
+      document.getElementById('memo-title').value = m.title;
+      document.getElementById('memo-content').value = m.content || '';
+      this.openModal('modal-memo');
+    } catch(e) { this.toast('불러오기 실패', 'warn'); }
+  },
+
+  async saveMemo() {
+    const id = document.getElementById('memo-id').value;
+    const title = document.getElementById('memo-title').value.trim();
+    if(!title) { alert('제목을 입력하세요'); return; }
+    const data = { title, content: document.getElementById('memo-content').value };
+    try {
+      if(id) await API.put('/memos/'+id, data);
+      else await API.post('/memos', data);
+      this.toast(id ? '메모가 수정됐습니다' : '메모가 저장됐습니다');
+      this.closeModal('modal-memo');
+      this.renderMemo();
+    } catch(e) { this.toast('저장 실패: '+(e.message||'오류'), 'warn'); }
+  },
+
+  async deleteMemo(id) {
+    if(!confirm('메모를 삭제할까요?')) return;
+    try {
+      await API.del('/memos/'+id);
+      this.toast('삭제됐습니다');
+      this.renderMemo();
+    } catch(e) { this.toast('삭제 실패', 'warn'); }
+  },
+
+  async memoToSchedule(id) {
+    // 메모 내용을 일정 모달로 전환
+    const memos = await API.get('/memos').catch(()=>[]);
+    const m = memos.find(x => x.id === id);
+    if(!m) return;
+    const sites = this.sites.length ? this.sites : await API.get('/sites').catch(()=>[]);
+    this.sites = sites;
+    document.getElementById('modal-sched-title').textContent = '일정으로 등록';
+    document.getElementById('sched-id').value = '';
+    document.getElementById('sched-title').value = m.title;
+    document.getElementById('sched-date').value = TODAY;
+    document.getElementById('sched-time').value = '';
+    document.getElementById('sched-memo').value = m.content || '';
+    document.getElementById('sched-tbd').checked = false;
+    document.getElementById('sched-date-row').style.display = 'grid';
+    this._setSiteSearch('');
+    this._resetSchedModal();
+    this.closeModal('modal-memo');
+    this.openModal('modal-schedule');
+    // 일정 저장 후 원본 메모 삭제 여부 묻기
+    this._pendingDeleteMemoId = id;
+  },
+
   toast(msg, type='ok') {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -1386,6 +1526,12 @@ function fmtDate(d) {
   if(!d) return '-';
   const dt = new Date(d + 'T00:00:00');
   return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일`;
+}
+function fmtDatetime(d) {
+  if(!d) return '-';
+  const dt = new Date(d.replace(' ', 'T'));
+  const pad = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}.${pad(dt.getMonth()+1)}.${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
 
 // ── Schedule modal photo preview ───────────────────────────────────────────

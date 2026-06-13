@@ -29,6 +29,14 @@ def get_db():
 def init_db():
     conn = get_db()
     conn.executescript('''
+        CREATE TABLE IF NOT EXISTS memos (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            content TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS sites (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -489,6 +497,51 @@ def complete_schedule(scid):
     conn.commit()
     conn.close()
     return jsonify({'ok': True, 'visit': visit})
+
+
+# ── Memos ─────────────────────────────────────────────────────────────────────
+
+@app.route('/api/memos', methods=['GET'])
+def get_memos():
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM memos ORDER BY updated_at DESC').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/memos', methods=['POST'])
+def create_memo():
+    d = request.json
+    if not d.get('title', '').strip():
+        return jsonify({'error': '제목을 입력하세요'}), 400
+    mid = str(uuid.uuid4())
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute('INSERT INTO memos (id,title,content,created_at,updated_at) VALUES (?,?,?,?,?)',
+        (mid, d['title'].strip(), d.get('content',''), now, now))
+    conn.commit()
+    row = conn.execute('SELECT * FROM memos WHERE id=?', (mid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+@app.route('/api/memos/<mid>', methods=['PUT'])
+def update_memo(mid):
+    d = request.json
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute('UPDATE memos SET title=?,content=?,updated_at=? WHERE id=?',
+        (d['title'], d.get('content',''), now, mid))
+    conn.commit()
+    row = conn.execute('SELECT * FROM memos WHERE id=?', (mid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+@app.route('/api/memos/<mid>', methods=['DELETE'])
+def delete_memo(mid):
+    conn = get_db()
+    conn.execute('DELETE FROM memos WHERE id=?', (mid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
 
 
 # ── Search ────────────────────────────────────────────────────────────────────

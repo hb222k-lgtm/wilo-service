@@ -173,6 +173,18 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 .empty{text-align:center;color:var(--sub);padding:44px 20px;font-size:14px}
 .empty .big{font-size:40px;margin-bottom:10px}
 
+/* 실시간 인도 배너 */
+#liveBanner{position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + 10px);z-index:400;
+  background:var(--primary);color:#fff;border-radius:14px;padding:13px 16px;
+  display:none;align-items:center;gap:9px;font-size:15px;font-weight:600;cursor:pointer;
+  box-shadow:0 4px 16px rgba(88,86,214,.4);animation:livePulse 2s infinite}
+#liveBanner.show{display:flex}
+#liveBanner .dot{width:9px;height:9px;border-radius:50%;background:#fff;flex-shrink:0}
+#liveBanner .go{margin-left:auto;font-size:14px;opacity:.95;white-space:nowrap}
+@keyframes livePulse{0%,100%{box-shadow:0 4px 16px rgba(88,86,214,.4)}50%{box-shadow:0 4px 24px rgba(88,86,214,.75)}}
+#viewerBar button.leading{background:var(--danger)}
+#viewerBar button#viewerFollowBtn{background:var(--success)}
+
 #toast{position:fixed;bottom:calc(var(--nav-h) + 14px);left:50%;transform:translateX(-50%) translateY(20px);
   background:rgba(28,28,30,.92);color:#fff;padding:11px 20px;border-radius:22px;font-size:14px;
   opacity:0;pointer-events:none;transition:all .25s;z-index:1000;white-space:nowrap}
@@ -350,10 +362,18 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
   </div>
 </div>
 
+<!-- 실시간 인도 배너 (팀원용) -->
+<div id="liveBanner" onclick="joinLive()">
+  <span class="dot"></span><span id="liveText"></span>
+  <span class="go">따라가기 ›</span>
+</div>
+
 <!-- 악보 뷰어 -->
 <div id="viewer">
   <div id="viewerBar">
     <div class="vt" id="viewerTitle"></div>
+    <button id="viewerLeadBtn" onclick="toggleLead()" style="display:none">📡 인도 시작</button>
+    <button id="viewerFollowBtn" onclick="stopFollow()" style="display:none">👀 따라가는 중</button>
     <button id="viewerAddBtn" onclick="document.getElementById('pageAddInput').click()">＋ 페이지</button>
     <button id="viewerDelBtn" onclick="deleteCurrentSong()">삭제</button>
     <button onclick="closeViewer()">닫기</button>
@@ -384,6 +404,9 @@ let currentFolder = '';
 let currentSetlist = null;   // 콘티 상세
 let viewerSongId = null;     // 뷰어에 열린 단일 곡
 let lastReqIds = null;       // 새 요청 감지용
+let playCtx = null;          // 연주 모드 상태 {setlistId, leading, following}
+let leadHeartbeat = null;    // 인도자 위치 주기 전송
+let followTimer = null;      // 팀원 따라가기 주기
 
 const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -500,6 +523,9 @@ async function saveSong(){
 async function openSongViewer(songId){
   const s = await api.get('/api/band/songs/' + songId);
   viewerSongId = songId;
+  playCtx = null;
+  document.getElementById('viewerLeadBtn').style.display = 'none';
+  document.getElementById('viewerFollowBtn').style.display = 'none';
   document.getElementById('viewerTitle').textContent = s.title + (s.memo ? ' · ' + s.memo : '');
   document.getElementById('viewerAddBtn').style.display = '';
   document.getElementById('viewerDelBtn').style.display = '';
@@ -516,6 +542,12 @@ async function openSongViewer(songId){
 }
 
 function closeViewer(){
+  if (playCtx && playCtx.leading){
+    api.post('/api/band/live/stop', {});
+    clearInterval(leadHeartbeat);
+  }
+  clearInterval(followTimer);
+  playCtx = null;
   document.getElementById('viewer').classList.remove('open');
   viewerSongId = null;
 }
@@ -684,21 +716,131 @@ async function pickSong(songId){
   loadSetlists();
 }
 
-// 연주 모드: 콘티 전체 악보를 순서대로
-async function playSetlist(){
+// 연주 모드: 콘티 전체 악보를 순서대로 (opts.follow=true 면 인도 따라가기)
+async function playSetlist(opts){
+  opts = opts || {};
   const sl = await api.get('/api/band/setlists/' + currentSetlist.id);
   if (!sl.songs.length) return toast('콘티에 곡을 먼저 추가하세요');
   const details = await Promise.all(sl.songs.map(s => api.get('/api/band/songs/' + s.song_id)));
+  playCtx = {setlistId: sl.id, leading: false, following: !!opts.follow};
   viewerSongId = null;
   document.getElementById('viewerTitle').textContent = sl.title;
   document.getElementById('viewerAddBtn').style.display = 'none';
   document.getElementById('viewerDelBtn').style.display = 'none';
+  const leadBtn = document.getElementById('viewerLeadBtn');
+  leadBtn.style.display = opts.follow ? 'none' : '';
+  leadBtn.textContent = '📡 인도 시작';
+  leadBtn.classList.remove('leading');
+  document.getElementById('viewerFollowBtn').style.display = opts.follow ? '' : 'none';
   document.getElementById('viewerBody').innerHTML = details.map((s, i) => `
     <div class="song-title"><span class="n">${i+1}</span>${esc(s.title)}${s.memo ? ` <span style="font-weight:400;color:#bbb;font-size:13px">${esc(s.memo)}</span>` : ''}</div>
-    ${s.pages.map(p => `<img src="/api/photo/band_${s.id}/${p.filename}" loading="lazy">`).join('')}
+    ${s.pages.map((p, pi) => `<div class="pg" id="pg-${i}-${pi}" data-song="${i}" data-page="${pi}"><img src="/api/photo/band_${s.id}/${p.filename}" loading="lazy"></div>`).join('')}
   `).join('');
   document.getElementById('viewer').classList.add('open');
   document.getElementById('viewerBody').scrollTop = 0;
+  if (opts.follow) startFollowLoop();
+}
+
+// ── 실시간 인도 / 따라가기 ─────────────────────────────
+
+// 뷰어에서 화면 맨 위에 보이는 페이지 요소 찾기
+function topmostPage(){
+  const bar = document.getElementById('viewerBar').getBoundingClientRect().bottom;
+  const pages = document.getElementById('viewerBody').querySelectorAll('.pg');
+  for (const el of pages){
+    if (el.getBoundingClientRect().bottom > bar + 20) return el;
+  }
+  return pages[pages.length - 1] || null;
+}
+
+// 인도자: 현재 위치를 서버에 전송
+function broadcastPosition(){
+  if (!playCtx || !playCtx.leading) return;
+  const el = topmostPage();
+  api.post('/api/band/live', {
+    setlist_id: playCtx.setlistId,
+    song_index: el ? +el.dataset.song : 0,
+    page_index: el ? +el.dataset.page : 0,
+    leader: myName(),
+  });
+}
+
+async function toggleLead(){
+  if (!playCtx || !playCtx.setlistId) return;
+  if (playCtx.leading){
+    playCtx.leading = false;
+    const b = document.getElementById('viewerLeadBtn');
+    b.textContent = '📡 인도 시작'; b.classList.remove('leading');
+    clearInterval(leadHeartbeat);
+    await api.post('/api/band/live/stop', {});
+    toast('인도를 종료했어요');
+  } else {
+    let name = myName();
+    if (!name){
+      name = (prompt('인도자 이름을 입력하세요') || '').trim();
+      if (!name) return;
+      localStorage.setItem('band_name', name);
+    }
+    playCtx.leading = true;
+    const b = document.getElementById('viewerLeadBtn');
+    b.textContent = '📡 인도 중'; b.classList.add('leading');
+    broadcastPosition();
+    leadHeartbeat = setInterval(broadcastPosition, 5000);
+    toast('이제 화면을 넘기면 팀원 화면도 함께 넘어가요');
+  }
+}
+
+// 팀원: 인도자의 위치로 화면 이동
+function applyLive(live){
+  const el = document.getElementById(`pg-${live.song_index}-${live.page_index}`);
+  if (!el) return;
+  const body = document.getElementById('viewerBody');
+  const target = body.scrollTop + el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  if (Math.abs(body.scrollTop - target) > 40) body.scrollTo({top: target, behavior: 'smooth'});
+}
+
+function startFollowLoop(){
+  clearInterval(followTimer);
+  const tick = async () => {
+    if (!playCtx || !playCtx.following) return;
+    const live = await api.get('/api/band/live');
+    if (!live.active){ toast('인도가 종료되었어요 · 자유롭게 넘겨보세요'); stopFollow(); return; }
+    applyLive(live);
+  };
+  tick();
+  followTimer = setInterval(tick, 1200);
+}
+
+function stopFollow(){
+  if (playCtx) playCtx.following = false;
+  clearInterval(followTimer);
+  document.getElementById('viewerFollowBtn').style.display = 'none';
+  const b = document.getElementById('viewerLeadBtn');
+  b.style.display = ''; b.textContent = '📡 인도 시작'; b.classList.remove('leading');
+}
+
+// 팀원: 배너 눌러 인도 따라가기 시작
+async function joinLive(){
+  const live = await api.get('/api/band/live');
+  if (!live.active || !live.setlist_id) return toast('진행 중인 인도가 없어요');
+  currentSetlist = {id: live.setlist_id};
+  document.getElementById('liveBanner').classList.remove('show');
+  await playSetlist({follow: true});
+}
+
+// 진행 중인 인도가 있으면 하단 배너 표시
+async function checkLive(){
+  let live;
+  try { live = await api.get('/api/band/live'); } catch(e){ return; }
+  const banner = document.getElementById('liveBanner');
+  const iAmLeading = playCtx && playCtx.leading;
+  const viewerOpen = document.getElementById('viewer').classList.contains('open');
+  if (live.active && !iAmLeading && !viewerOpen){
+    document.getElementById('liveText').textContent = `${live.leader || '인도자'}님이 인도 중이에요`;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
 }
 
 // ── 방송실 요청 ────────────────────────────────────────
@@ -820,6 +962,18 @@ async function deleteNote(){
   closeModal('noteModal');
   loadNotes();
 }
+
+// 인도자가 화면을 넘기면(스크롤) 위치 전송
+document.getElementById('viewerBody').addEventListener('scroll', () => {
+  if (playCtx && playCtx.leading){
+    clearTimeout(broadcastPosition._t);
+    broadcastPosition._t = setTimeout(broadcastPosition, 250);
+  }
+});
+
+// 진행 중인 인도 확인 (화면 보일 때만)
+checkLive();
+setInterval(() => { if (!document.hidden) checkLive(); }, 3000);
 
 // ── 시작 ──────────────────────────────────────────────
 loadSongs();

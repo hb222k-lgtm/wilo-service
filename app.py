@@ -128,6 +128,17 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- 실시간 인도(따라가기): 인도자가 넘기는 위치를 공유
+        CREATE TABLE IF NOT EXISTS band_live (
+            id TEXT PRIMARY KEY,
+            setlist_id TEXT,
+            song_index INTEGER DEFAULT 0,
+            page_index INTEGER DEFAULT 0,
+            leader TEXT,
+            active INTEGER DEFAULT 0,
+            updated_at TEXT
+        );
     ''')
     conn.commit()
     conn.close()
@@ -983,6 +994,56 @@ def band_update_note(nid):
 def band_delete_note(nid):
     conn = get_db()
     conn.execute('DELETE FROM band_notes WHERE id=?', (nid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 실시간 인도(따라가기): 인도자가 넘기면 팀원 화면이 함께 이동
+
+LIVE_TIMEOUT = 40  # 초. 인도자가 이 시간 넘게 위치를 안 보내면 자동 종료로 간주
+
+
+@app.route('/api/band/live', methods=['GET'])
+def band_live_get():
+    conn = get_db()
+    row = conn.execute("SELECT * FROM band_live WHERE id='current'").fetchone()
+    conn.close()
+    if not row or not row['active']:
+        return jsonify({'active': 0})
+    d = dict(row)
+    # 인도자가 오래 위치를 안 보내면 종료된 것으로 처리
+    try:
+        last = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S')
+        if (datetime.now() - last).total_seconds() > LIVE_TIMEOUT:
+            return jsonify({'active': 0})
+    except (TypeError, ValueError):
+        pass
+    return jsonify(d)
+
+
+@app.route('/api/band/live', methods=['POST'])
+def band_live_set():
+    d = request.json or {}
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO band_live (id,setlist_id,song_index,page_index,leader,active,updated_at)
+        VALUES ('current',?,?,?,?,1,?)
+        ON CONFLICT(id) DO UPDATE SET
+            setlist_id=excluded.setlist_id, song_index=excluded.song_index,
+            page_index=excluded.page_index, leader=excluded.leader,
+            active=1, updated_at=excluded.updated_at
+    ''', (d.get('setlist_id'), d.get('song_index', 0), d.get('page_index', 0), d.get('leader'), now))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/band/live/stop', methods=['POST'])
+def band_live_stop():
+    conn = get_db()
+    conn.execute("UPDATE band_live SET active=0 WHERE id='current'")
     conn.commit()
     conn.close()
     return jsonify({'ok': True})

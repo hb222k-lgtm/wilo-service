@@ -1,4 +1,4 @@
-const CACHE = 'wilo-v3';
+const CACHE = 'wilo-v4';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {

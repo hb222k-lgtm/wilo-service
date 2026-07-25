@@ -80,6 +80,65 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
         );
+
+        -- 방송팀·찬양팀 소통 (/band)
+        CREATE TABLE IF NOT EXISTS band_songs (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            folder TEXT DEFAULT '기본',
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS band_song_pages (
+            id TEXT PRIMARY KEY,
+            song_id TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            page_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (song_id) REFERENCES band_songs(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS band_setlists (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            setlist_date TEXT,
+            memo TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS band_setlist_songs (
+            id TEXT PRIMARY KEY,
+            setlist_id TEXT NOT NULL,
+            song_id TEXT NOT NULL,
+            position INTEGER DEFAULT 0,
+            note TEXT,
+            FOREIGN KEY (setlist_id) REFERENCES band_setlists(id) ON DELETE CASCADE,
+            FOREIGN KEY (song_id) REFERENCES band_songs(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS band_requests (
+            id TEXT PRIMARY KEY,
+            sender TEXT,
+            message TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            done_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS band_notes (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            content TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- 실시간 인도(따라가기): 인도자가 넘기는 위치를 공유
+        CREATE TABLE IF NOT EXISTS band_live (
+            id TEXT PRIMARY KEY,
+            setlist_id TEXT,
+            song_index INTEGER DEFAULT 0,
+            page_index INTEGER DEFAULT 0,
+            leader TEXT,
+            active INTEGER DEFAULT 0,
+            updated_at TEXT
+        );
     ''')
     conn.commit()
     conn.close()
@@ -566,7 +625,436 @@ def search():
     return jsonify({'sites': [dict(r) for r in sites], 'visits': [dict(r) for r in visits]})
 
 
+# ── Band: 방송팀·찬양팀 소통 ──────────────────────────────────────────────────
+
+def song_folder_key(song_id):
+    return f'band_{song_id}'
+
+
+@app.route('/api/band/folders', methods=['GET'])
+def band_folders():
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT COALESCE(folder, '기본') folder, COUNT(*) cnt
+        FROM band_songs GROUP BY COALESCE(folder, '기본') ORDER BY folder
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/band/songs', methods=['GET'])
+def band_songs():
+    folder = request.args.get('folder', '').strip()
+    q = request.args.get('q', '').strip()
+    conn = get_db()
+    sql = '''
+        SELECT s.*, COUNT(p.id) page_count,
+               (SELECT filename FROM band_song_pages WHERE song_id=s.id ORDER BY page_order LIMIT 1) cover
+        FROM band_songs s LEFT JOIN band_song_pages p ON p.song_id=s.id
+    '''
+    cond, args = [], []
+    if folder:
+        cond.append("COALESCE(s.folder,'기본')=?")
+        args.append(folder)
+    if q:
+        cond.append('s.title LIKE ?')
+        args.append(f'%{q}%')
+    if cond:
+        sql += ' WHERE ' + ' AND '.join(cond)
+    sql += ' GROUP BY s.id ORDER BY s.title'
+    rows = conn.execute(sql, args).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/band/songs', methods=['POST'])
+def band_create_song():
+    title = (request.form.get('title') or '').strip()
+    if not title:
+        return jsonify({'error': '곡 제목을 입력하세요'}), 400
+    song_id = str(uuid.uuid4())
+    folder = (request.form.get('folder') or '').strip() or '기본'
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO band_songs (id,title,folder,memo) VALUES (?,?,?,?)',
+        (song_id, title, folder, request.form.get('memo'))
+    )
+    order = 0
+    for f in request.files.getlist('pages'):
+        pid, filename = save_photo_file(f, song_folder_key(song_id))
+        if pid:
+            conn.execute(
+                'INSERT INTO band_song_pages (id,song_id,filename,page_order) VALUES (?,?,?,?)',
+                (pid, song_id, filename, order)
+            )
+            order += 1
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_songs WHERE id=?', (song_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/band/songs/<song_id>', methods=['GET'])
+def band_get_song(song_id):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM band_songs WHERE id=?', (song_id,)).fetchone()
+    if not row:
+        conn.close()
+        return ('', 404)
+    pages = conn.execute(
+        'SELECT * FROM band_song_pages WHERE song_id=? ORDER BY page_order', (song_id,)
+    ).fetchall()
+    conn.close()
+    d = dict(row)
+    d['pages'] = [dict(p) for p in pages]
+    return jsonify(d)
+
+
+@app.route('/api/band/songs/<song_id>', methods=['PUT'])
+def band_update_song(song_id):
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE band_songs SET title=?,folder=?,memo=? WHERE id=?',
+        (d['title'], (d.get('folder') or '').strip() or '기본', d.get('memo'), song_id)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_songs WHERE id=?', (song_id,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route('/api/band/songs/<song_id>', methods=['DELETE'])
+def band_delete_song(song_id):
+    conn = get_db()
+    pages = conn.execute('SELECT filename FROM band_song_pages WHERE song_id=?', (song_id,)).fetchall()
+    for p in pages:
+        for d in [PHOTO_DIR, THUMB_DIR]:
+            path = os.path.join(d, song_folder_key(song_id), p['filename'])
+            if os.path.exists(path):
+                os.remove(path)
+    conn.execute('DELETE FROM band_song_pages WHERE song_id=?', (song_id,))
+    conn.execute('DELETE FROM band_setlist_songs WHERE song_id=?', (song_id,))
+    conn.execute('DELETE FROM band_songs WHERE id=?', (song_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/band/songs/<song_id>/pages', methods=['POST'])
+def band_add_pages(song_id):
+    conn = get_db()
+    if not conn.execute('SELECT 1 FROM band_songs WHERE id=?', (song_id,)).fetchone():
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    start = conn.execute(
+        'SELECT COALESCE(MAX(page_order)+1,0) FROM band_song_pages WHERE song_id=?', (song_id,)
+    ).fetchone()[0]
+    added = []
+    for i, f in enumerate(request.files.getlist('pages')):
+        pid, filename = save_photo_file(f, song_folder_key(song_id))
+        if pid:
+            conn.execute(
+                'INSERT INTO band_song_pages (id,song_id,filename,page_order) VALUES (?,?,?,?)',
+                (pid, song_id, filename, start + i)
+            )
+            added.append(pid)
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'added': len(added)}), 201
+
+
+@app.route('/api/band/pages/<pid>', methods=['DELETE'])
+def band_delete_page(pid):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM band_song_pages WHERE id=?', (pid,)).fetchone()
+    if row:
+        for d in [PHOTO_DIR, THUMB_DIR]:
+            path = os.path.join(d, song_folder_key(row['song_id']), row['filename'])
+            if os.path.exists(path):
+                os.remove(path)
+        conn.execute('DELETE FROM band_song_pages WHERE id=?', (pid,))
+        conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 콘티 (예배/기도회 곡 순서)
+
+@app.route('/api/band/setlists', methods=['GET'])
+def band_setlists():
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT sl.*, COUNT(ss.id) song_count FROM band_setlists sl
+        LEFT JOIN band_setlist_songs ss ON ss.setlist_id=sl.id
+        GROUP BY sl.id
+        ORDER BY sl.setlist_date DESC, sl.created_at DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/band/setlists', methods=['POST'])
+def band_create_setlist():
+    d = request.json
+    if not d.get('title', '').strip():
+        return jsonify({'error': '제목을 입력하세요'}), 400
+    slid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO band_setlists (id,title,setlist_date,memo) VALUES (?,?,?,?)',
+        (slid, d['title'].strip(), d.get('setlist_date'), d.get('memo'))
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_setlists WHERE id=?', (slid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/band/setlists/<slid>', methods=['GET'])
+def band_get_setlist(slid):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM band_setlists WHERE id=?', (slid,)).fetchone()
+    if not row:
+        conn.close()
+        return ('', 404)
+    songs = conn.execute('''
+        SELECT ss.id item_id, ss.position, ss.note, s.id song_id, s.title, s.folder,
+               (SELECT COUNT(*) FROM band_song_pages WHERE song_id=s.id) page_count,
+               (SELECT filename FROM band_song_pages WHERE song_id=s.id ORDER BY page_order LIMIT 1) cover
+        FROM band_setlist_songs ss JOIN band_songs s ON s.id=ss.song_id
+        WHERE ss.setlist_id=? ORDER BY ss.position
+    ''', (slid,)).fetchall()
+    conn.close()
+    d = dict(row)
+    d['songs'] = [dict(s) for s in songs]
+    return jsonify(d)
+
+
+@app.route('/api/band/setlists/<slid>', methods=['PUT'])
+def band_update_setlist(slid):
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE band_setlists SET title=?,setlist_date=?,memo=? WHERE id=?',
+        (d['title'], d.get('setlist_date'), d.get('memo'), slid)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_setlists WHERE id=?', (slid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route('/api/band/setlists/<slid>', methods=['DELETE'])
+def band_delete_setlist(slid):
+    conn = get_db()
+    conn.execute('DELETE FROM band_setlist_songs WHERE setlist_id=?', (slid,))
+    conn.execute('DELETE FROM band_setlists WHERE id=?', (slid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/band/setlists/<slid>/songs', methods=['POST'])
+def band_setlist_add_song(slid):
+    d = request.json
+    if not d.get('song_id'):
+        return jsonify({'error': 'song_id가 필요합니다'}), 400
+    conn = get_db()
+    pos = conn.execute(
+        'SELECT COALESCE(MAX(position)+1,0) FROM band_setlist_songs WHERE setlist_id=?', (slid,)
+    ).fetchone()[0]
+    item_id = str(uuid.uuid4())
+    conn.execute(
+        'INSERT INTO band_setlist_songs (id,setlist_id,song_id,position,note) VALUES (?,?,?,?,?)',
+        (item_id, slid, d['song_id'], pos, d.get('note'))
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'item_id': item_id}), 201
+
+
+@app.route('/api/band/setlists/<slid>/songs/<item_id>', methods=['DELETE'])
+def band_setlist_remove_song(slid, item_id):
+    conn = get_db()
+    conn.execute('DELETE FROM band_setlist_songs WHERE id=? AND setlist_id=?', (item_id, slid))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/band/setlists/<slid>/order', methods=['PUT'])
+def band_setlist_reorder(slid):
+    item_ids = (request.json or {}).get('item_ids', [])
+    conn = get_db()
+    for i, item_id in enumerate(item_ids):
+        conn.execute(
+            'UPDATE band_setlist_songs SET position=? WHERE id=? AND setlist_id=?',
+            (i, item_id, slid)
+        )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 방송실 요청 (모니터 볼륨, 마이크 등)
+
+@app.route('/api/band/requests', methods=['GET'])
+def band_requests():
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM band_requests ORDER BY created_at DESC LIMIT 50'
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/band/requests', methods=['POST'])
+def band_create_request():
+    d = request.json
+    if not d.get('message', '').strip():
+        return jsonify({'error': '요청 내용을 입력하세요'}), 400
+    rid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO band_requests (id,sender,message) VALUES (?,?,?)',
+        (rid, (d.get('sender') or '').strip() or None, d['message'].strip())
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_requests WHERE id=?', (rid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/band/requests/<rid>/done', methods=['POST'])
+def band_request_done(rid):
+    conn = get_db()
+    conn.execute(
+        "UPDATE band_requests SET status='done', done_at=CURRENT_TIMESTAMP WHERE id=?", (rid,)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_requests WHERE id=?', (rid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)) if row else ('', 404)
+
+
+@app.route('/api/band/requests/<rid>', methods=['DELETE'])
+def band_delete_request(rid):
+    conn = get_db()
+    conn.execute('DELETE FROM band_requests WHERE id=?', (rid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 전달사항/주의사항 메모
+
+@app.route('/api/band/notes', methods=['GET'])
+def band_notes():
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM band_notes ORDER BY updated_at DESC').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/band/notes', methods=['POST'])
+def band_create_note():
+    d = request.json
+    if not d.get('title', '').strip():
+        return jsonify({'error': '제목을 입력하세요'}), 400
+    nid = str(uuid.uuid4())
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO band_notes (id,title,content,created_at,updated_at) VALUES (?,?,?,?,?)',
+        (nid, d['title'].strip(), d.get('content', ''), now, now)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_notes WHERE id=?', (nid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/band/notes/<nid>', methods=['PUT'])
+def band_update_note(nid):
+    d = request.json
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute(
+        'UPDATE band_notes SET title=?,content=?,updated_at=? WHERE id=?',
+        (d['title'], d.get('content', ''), now, nid)
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_notes WHERE id=?', (nid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row))
+
+
+@app.route('/api/band/notes/<nid>', methods=['DELETE'])
+def band_delete_note(nid):
+    conn = get_db()
+    conn.execute('DELETE FROM band_notes WHERE id=?', (nid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 실시간 인도(따라가기): 인도자가 넘기면 팀원 화면이 함께 이동
+
+LIVE_TIMEOUT = 40  # 초. 인도자가 이 시간 넘게 위치를 안 보내면 자동 종료로 간주
+
+
+@app.route('/api/band/live', methods=['GET'])
+def band_live_get():
+    conn = get_db()
+    row = conn.execute("SELECT * FROM band_live WHERE id='current'").fetchone()
+    conn.close()
+    if not row or not row['active']:
+        return jsonify({'active': 0})
+    d = dict(row)
+    # 인도자가 오래 위치를 안 보내면 종료된 것으로 처리
+    try:
+        last = datetime.strptime(d['updated_at'], '%Y-%m-%d %H:%M:%S')
+        if (datetime.now() - last).total_seconds() > LIVE_TIMEOUT:
+            return jsonify({'active': 0})
+    except (TypeError, ValueError):
+        pass
+    return jsonify(d)
+
+
+@app.route('/api/band/live', methods=['POST'])
+def band_live_set():
+    d = request.json or {}
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO band_live (id,setlist_id,song_index,page_index,leader,active,updated_at)
+        VALUES ('current',?,?,?,?,1,?)
+        ON CONFLICT(id) DO UPDATE SET
+            setlist_id=excluded.setlist_id, song_index=excluded.song_index,
+            page_index=excluded.page_index, leader=excluded.leader,
+            active=1, updated_at=excluded.updated_at
+    ''', (d.get('setlist_id'), d.get('song_index', 0), d.get('page_index', 0), d.get('leader'), now))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/band/live/stop', methods=['POST'])
+def band_live_stop():
+    conn = get_db()
+    conn.execute("UPDATE band_live SET active=0 WHERE id='current'")
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
 # ── Static ────────────────────────────────────────────────────────────────────
+
+@app.route('/band')
+def band_page():
+    return send_from_directory('static', 'band.html')
+
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

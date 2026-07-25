@@ -1,4 +1,4 @@
-const CACHE = 'wilo-v2';
+const CACHE = 'wilo-v4';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -22,6 +22,15 @@ self.addEventListener('fetch', e => {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+  } else if (e.request.mode === 'navigate') {
+    // 페이지(HTML)는 네트워크 우선 - 업데이트가 바로 반영되도록
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
         return res;
       }).catch(() => caches.match(e.request))
     );

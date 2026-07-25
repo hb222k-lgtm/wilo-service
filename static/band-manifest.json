@@ -1,0 +1,9 @@
+{
+  "name": "찬양팀 · 방송실",
+  "short_name": "찬양·방송",
+  "start_url": "/band",
+  "display": "standalone",
+  "background_color": "#f2f2f7",
+  "theme_color": "#5856d6",
+  "orientation": "portrait"
+}

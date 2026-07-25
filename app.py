@@ -1051,6 +1051,17 @@ def band_live_stop():
 
 # ── Static ────────────────────────────────────────────────────────────────────
 
+# 찬양/방송팀 전용 도메인: 이 호스트로 접속하면 첫 화면부터 /band 화면을 띄운다.
+# Railway 등에서 별도 도메인(예: worship.example.com)을 서비스에 연결한 뒤
+# 환경변수 BAND_HOST 에 그 도메인을 넣으면 됨. 여러 개면 콤마로 구분.
+BAND_HOSTS = [h.strip().lower() for h in os.environ.get('BAND_HOST', '').split(',') if h.strip()]
+
+
+def is_band_host():
+    host = (request.host or '').split(':')[0].lower()
+    return any(host == b or b in host for b in BAND_HOSTS)
+
+
 @app.route('/band')
 def band_page():
     return send_from_directory('static', 'band.html')
@@ -1061,6 +1072,9 @@ def band_page():
 def serve(path):
     if path and os.path.exists(os.path.join('static', path)):
         return send_from_directory('static', path)
+    # 찬양/방송 전용 도메인이면 찬양 화면을, 아니면 기존 윌로 관리 화면을
+    if is_band_host():
+        return send_from_directory('static', 'band.html')
     return send_from_directory('static', 'index.html')
 
 

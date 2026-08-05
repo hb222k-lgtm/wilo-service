@@ -1051,13 +1051,18 @@ def band_live_stop():
 
 # ── Static ────────────────────────────────────────────────────────────────────
 
-# 찬양/방송팀 전용 도메인: 이 호스트로 접속하면 첫 화면부터 /band 화면을 띄운다.
-# Railway 등에서 별도 도메인(예: worship.example.com)을 서비스에 연결한 뒤
-# 환경변수 BAND_HOST 에 그 도메인을 넣으면 됨. 여러 개면 콤마로 구분.
+# 찬양/방송팀 전용 화면(첫 화면부터 /band)을 켜는 두 가지 방법:
+#  1) BAND_ONLY=1  : 이 서비스는 무조건 찬양 화면만. (윌로와 별개인 전용 서비스로
+#                    같은 코드를 하나 더 띄울 때 사용 — 자체 주소/DB를 가짐)
+#  2) BAND_HOST=... : 지정한 도메인으로 접속했을 때만 찬양 화면. (한 서비스에 별도
+#                    도메인을 연결해 쓰는 경우. 여러 개면 콤마로 구분)
+BAND_ONLY  = os.environ.get('BAND_ONLY', '').strip().lower() in ('1', 'true', 'yes', 'on')
 BAND_HOSTS = [h.strip().lower() for h in os.environ.get('BAND_HOST', '').split(',') if h.strip()]
 
 
 def is_band_host():
+    if BAND_ONLY:
+        return True
     host = (request.host or '').split(':')[0].lower()
     return any(host == b or b in host for b in BAND_HOSTS)
 
@@ -1070,12 +1075,13 @@ def band_page():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    band = is_band_host()
+    # 찬양 전용일 때는 관리자 홈(index.html)을 노출하지 않고 찬양 화면으로
+    if band and (path == '' or path == 'index.html'):
+        return send_from_directory('static', 'band.html')
     if path and os.path.exists(os.path.join('static', path)):
         return send_from_directory('static', path)
-    # 찬양/방송 전용 도메인이면 찬양 화면을, 아니면 기존 윌로 관리 화면을
-    if is_band_host():
-        return send_from_directory('static', 'band.html')
-    return send_from_directory('static', 'index.html')
+    return send_from_directory('static', 'band.html' if band else 'index.html')
 
 
 if __name__ == '__main__':

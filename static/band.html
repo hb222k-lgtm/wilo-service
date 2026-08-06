@@ -193,6 +193,16 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 #fileInput,#pageAddInput{display:none}
+
+/* 붙여넣기 미리보기 */
+.paste-preview{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.paste-preview .pp{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.paste-preview .pp img{width:100%;height:100%;object-fit:cover}
+.paste-preview .pp button{position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;
+  background:rgba(0,0,0,.6);color:#fff;border-radius:50%;font-size:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0}
+.paste-hint{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.5}
+.paste-hint b{color:var(--text)}
 </style>
 </head>
 <body>
@@ -283,9 +293,14 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
       <div class="form-group"><label>폴더</label><input id="songFolder" list="folderOptions" placeholder="예) 주일예배, 기도회 (미입력 시 기본)"><datalist id="folderOptions"></datalist></div>
       <div class="form-group"><label>메모</label><input id="songMemo" placeholder="키, 특이사항 등 (선택)"></div>
       <div class="form-group">
-        <label>악보 사진 (여러 장 선택 가능)</label>
-        <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()" id="fileBtn">📷 사진 선택</button>
+        <label>악보 사진 (여러 장 선택 / 인터넷에서 복사 후 붙여넣기 가능)</label>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()" id="fileBtn">📷 사진 선택</button>
+          <button class="btn btn-outline" onclick="pasteImages()" id="pasteBtn">📋 붙여넣기</button>
+        </div>
         <input type="file" id="fileInput" accept="image/*" multiple onchange="updateFileBtn()">
+        <div id="pastePreview" class="paste-preview"></div>
+        <div class="paste-hint">인터넷 악보 이미지를 길게 눌러 <b>이미지 복사</b> → 여기서 <b>📋 붙여넣기</b> (PC는 Ctrl/⌘+V)</div>
       </div>
       <button class="btn btn-primary" onclick="saveSong()">저장</button>
     </div>
@@ -377,6 +392,7 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
     <button id="viewerLeadBtn" onclick="toggleLead()" style="display:none">📡 인도 시작</button>
     <button id="viewerFollowBtn" onclick="stopFollow()" style="display:none">👀 따라가는 중</button>
     <button id="viewerAddBtn" onclick="document.getElementById('pageAddInput').click()">＋ 페이지</button>
+    <button id="viewerPasteBtn" onclick="pasteToSong()">📋 붙여넣기</button>
     <button id="viewerDelBtn" onclick="deleteCurrentSong()">삭제</button>
     <button onclick="closeViewer()">닫기</button>
   </div>
@@ -491,17 +507,69 @@ function renderSongs(){
     </div>`).join('') + `</div>`;
 }
 
+let pastedFiles = [];   // 붙여넣기로 추가한 이미지들 (새 곡 등록용)
+
 function openSongModal(){
   ['songTitle','songFolder','songMemo'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('songFolder').value = currentFolder;
   document.getElementById('fileInput').value = '';
+  pastedFiles = [];
+  renderPastePreview();
   updateFileBtn();
   openModal('songModal');
 }
 
 function updateFileBtn(){
-  const n = document.getElementById('fileInput').files.length;
+  const n = document.getElementById('fileInput').files.length + pastedFiles.length;
   document.getElementById('fileBtn').textContent = n ? `📷 ${n}장 선택됨` : '📷 사진 선택';
+}
+
+function renderPastePreview(){
+  const el = document.getElementById('pastePreview');
+  el.innerHTML = pastedFiles.map((f, i) =>
+    `<div class="pp"><img src="${URL.createObjectURL(f)}"><button onclick="removePasted(${i})">✕</button></div>`
+  ).join('');
+}
+
+function removePasted(i){
+  pastedFiles.splice(i, 1);
+  renderPastePreview();
+  updateFileBtn();
+}
+
+// 클립보드 이미지 → 붙여넣기 (버튼: 모바일/PC 모두)
+async function pasteImages(){
+  const files = await readClipboardImages();
+  if (files === null) return; // 미지원/권한
+  if (!files.length) return toast('클립보드에 이미지가 없어요. 먼저 악보 이미지를 복사하세요');
+  pastedFiles.push(...files);
+  renderPastePreview();
+  updateFileBtn();
+  toast(`${files.length}장 붙여넣었어요`);
+}
+
+// navigator.clipboard.read()로 이미지 파일 배열 반환. 미지원/거부 시 null
+async function readClipboardImages(){
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read){
+      toast('이 브라우저는 붙여넣기 버튼을 지원하지 않아요. 사진 선택을 이용하세요');
+      return null;
+    }
+    const items = await navigator.clipboard.read();
+    const out = [];
+    for (const item of items){
+      const type = item.types.find(t => t.startsWith('image/'));
+      if (type){
+        const blob = await item.getType(type);
+        const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        out.push(new File([blob], `paste_${Date.now()}_${out.length}.${ext}`, {type: blob.type}));
+      }
+    }
+    return out;
+  } catch (e) {
+    toast('붙여넣기 권한을 허용해 주세요 (또는 사진 선택을 이용하세요)');
+    return null;
+  }
 }
 
 async function saveSong(){
@@ -512,6 +580,7 @@ async function saveSong(){
   form.append('folder', document.getElementById('songFolder').value.trim());
   form.append('memo', document.getElementById('songMemo').value.trim());
   for (const f of document.getElementById('fileInput').files) form.append('pages', f);
+  for (const f of pastedFiles) form.append('pages', f);
   toast('업로드 중...');
   const res = await api.postForm('/api/band/songs', form);
   if (res.error) return toast(res.error);
@@ -530,6 +599,7 @@ async function openSongViewer(songId){
   document.getElementById('viewerFollowBtn').style.display = 'none';
   document.getElementById('viewerTitle').textContent = s.title + (s.memo ? ' · ' + s.memo : '');
   document.getElementById('viewerAddBtn').style.display = '';
+  document.getElementById('viewerPasteBtn').style.display = '';
   document.getElementById('viewerDelBtn').style.display = '';
   const body = document.getElementById('viewerBody');
   body.innerHTML = s.pages.length
@@ -568,12 +638,50 @@ async function addPagesToSong(){
   loadSongs();
 }
 
+// 열려 있는 곡에 클립보드 이미지를 바로 붙여넣어 추가
+async function pasteToSong(){
+  if (!viewerSongId) return;
+  const files = await readClipboardImages();
+  if (!files) return;
+  if (!files.length) return toast('클립보드에 이미지가 없어요. 먼저 악보 이미지를 복사하세요');
+  const form = new FormData();
+  for (const f of files) form.append('pages', f);
+  toast('붙여넣는 중...');
+  await api.postForm(`/api/band/songs/${viewerSongId}/pages`, form);
+  toast(`${files.length}장 추가했어요`);
+  openSongViewer(viewerSongId);
+  loadSongs();
+}
+
 async function deletePage(pid){
   if (!confirm('이 페이지를 삭제할까요?')) return;
   await api.del('/api/band/pages/' + pid);
   openSongViewer(viewerSongId);
   loadSongs();
 }
+
+// PC에서 Ctrl/⌘+V 로 붙여넣기 (곡 등록 모달 열림 → 목록에, 단일 곡 뷰어 → 바로 추가)
+document.addEventListener('paste', async e => {
+  const imgs = [...(e.clipboardData?.items || [])]
+    .filter(i => i.type.startsWith('image/'))
+    .map(i => i.getAsFile())
+    .filter(Boolean);
+  if (!imgs.length) return;
+  if (document.getElementById('songModal').classList.contains('open')){
+    pastedFiles.push(...imgs);
+    renderPastePreview();
+    updateFileBtn();
+    toast(`${imgs.length}장 붙여넣었어요`);
+  } else if (document.getElementById('viewer').classList.contains('open') && viewerSongId){
+    const form = new FormData();
+    for (const f of imgs) form.append('pages', f);
+    toast('붙여넣는 중...');
+    await api.postForm(`/api/band/songs/${viewerSongId}/pages`, form);
+    toast(`${imgs.length}장 추가했어요`);
+    openSongViewer(viewerSongId);
+    loadSongs();
+  }
+});
 
 async function deleteCurrentSong(){
   if (!viewerSongId) return;
@@ -728,6 +836,7 @@ async function playSetlist(opts){
   viewerSongId = null;
   document.getElementById('viewerTitle').textContent = sl.title;
   document.getElementById('viewerAddBtn').style.display = 'none';
+  document.getElementById('viewerPasteBtn').style.display = 'none';
   document.getElementById('viewerDelBtn').style.display = 'none';
   const leadBtn = document.getElementById('viewerLeadBtn');
   leadBtn.style.display = opts.follow ? 'none' : '';

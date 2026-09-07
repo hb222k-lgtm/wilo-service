@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageOps
-import sqlite3, os, uuid, io
+import sqlite3, os, uuid, io, json
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -137,6 +137,13 @@ def init_db():
             page_index INTEGER DEFAULT 0,
             leader TEXT,
             active INTEGER DEFAULT 0,
+            updated_at TEXT
+        );
+
+        -- 악보 필기/주석 (인도자가 쓴 표시를 공유). 페이지당 1행, data=선(stroke) JSON
+        CREATE TABLE IF NOT EXISTS band_annotations (
+            page_id TEXT PRIMARY KEY,
+            data TEXT,
             updated_at TEXT
         );
     ''')
@@ -733,6 +740,9 @@ def band_delete_song(song_id):
             path = os.path.join(d, song_folder_key(song_id), p['filename'])
             if os.path.exists(path):
                 os.remove(path)
+    page_ids = [p['id'] for p in conn.execute('SELECT id FROM band_song_pages WHERE song_id=?', (song_id,)).fetchall()]
+    for pid in page_ids:
+        conn.execute('DELETE FROM band_annotations WHERE page_id=?', (pid,))
     conn.execute('DELETE FROM band_song_pages WHERE song_id=?', (song_id,))
     conn.execute('DELETE FROM band_setlist_songs WHERE song_id=?', (song_id,))
     conn.execute('DELETE FROM band_songs WHERE id=?', (song_id,))
@@ -774,7 +784,51 @@ def band_delete_page(pid):
             if os.path.exists(path):
                 os.remove(path)
         conn.execute('DELETE FROM band_song_pages WHERE id=?', (pid,))
+        conn.execute('DELETE FROM band_annotations WHERE page_id=?', (pid,))
         conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 악보 필기/주석 (인도자가 쓴 표시를 팀원이 함께 봄)
+
+@app.route('/api/band/songs/<song_id>/annotations', methods=['GET'])
+def band_get_annotations(song_id):
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT a.page_id, a.data FROM band_annotations a
+        JOIN band_song_pages p ON p.id = a.page_id
+        WHERE p.song_id=?
+    ''', (song_id,)).fetchall()
+    conn.close()
+    out = {}
+    for r in rows:
+        try:
+            out[r['page_id']] = json.loads(r['data'] or '[]')
+        except (TypeError, ValueError):
+            out[r['page_id']] = []
+    return jsonify(out)
+
+
+@app.route('/api/band/pages/<page_id>/annotation', methods=['PUT'])
+def band_save_annotation(page_id):
+    strokes = (request.json or {}).get('data', [])
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO band_annotations (page_id, data, updated_at) VALUES (?,?,?)
+        ON CONFLICT(page_id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
+    ''', (page_id, json.dumps(strokes), now))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/band/pages/<page_id>/annotation', methods=['DELETE'])
+def band_clear_annotation(page_id):
+    conn = get_db()
+    conn.execute('DELETE FROM band_annotations WHERE page_id=?', (page_id,))
+    conn.commit()
     conn.close()
     return jsonify({'ok': True})
 

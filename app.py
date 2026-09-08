@@ -146,6 +146,14 @@ def init_db():
             data TEXT,
             updated_at TEXT
         );
+
+        -- 빠른 요청 버튼 프리셋 (팀이 함께 수정)
+        CREATE TABLE IF NOT EXISTS band_quick_presets (
+            id TEXT PRIMARY KEY,
+            emoji TEXT,
+            text TEXT NOT NULL,
+            position INTEGER DEFAULT 0
+        );
     ''')
     conn.commit()
     conn.close()
@@ -946,6 +954,70 @@ def band_setlist_reorder(slid):
             'UPDATE band_setlist_songs SET position=? WHERE id=? AND setlist_id=?',
             (i, item_id, slid)
         )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# 빠른 요청 버튼 프리셋 (팀이 함께 추가/수정/삭제)
+
+DEFAULT_QUICK_PRESETS = [
+    ('🔊', '모니터 소리 키워주세요'),
+    ('🔉', '모니터 소리 줄여주세요'),
+    ('🎤', '마이크가 안 들려요'),
+    ('⚠️', '하울링(삐- 소리)이 나요'),
+]
+
+
+@app.route('/api/band/quickpresets', methods=['GET'])
+def band_quickpresets():
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM band_quick_presets ORDER BY position, rowid').fetchall()
+    if not rows:
+        # 처음이면 기본 버튼 채워넣기
+        for i, (emoji, text) in enumerate(DEFAULT_QUICK_PRESETS):
+            conn.execute('INSERT INTO band_quick_presets (id,emoji,text,position) VALUES (?,?,?,?)',
+                         (str(uuid.uuid4()), emoji, text, i))
+        conn.commit()
+        rows = conn.execute('SELECT * FROM band_quick_presets ORDER BY position, rowid').fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/band/quickpresets', methods=['POST'])
+def band_create_quickpreset():
+    d = request.json or {}
+    if not (d.get('text') or '').strip():
+        return jsonify({'error': '내용을 입력하세요'}), 400
+    conn = get_db()
+    pos = conn.execute('SELECT COALESCE(MAX(position)+1,0) FROM band_quick_presets').fetchone()[0]
+    pid = str(uuid.uuid4())
+    conn.execute('INSERT INTO band_quick_presets (id,emoji,text,position) VALUES (?,?,?,?)',
+                 (pid, (d.get('emoji') or '').strip(), d['text'].strip(), pos))
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_quick_presets WHERE id=?', (pid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/band/quickpresets/<pid>', methods=['PUT'])
+def band_update_quickpreset(pid):
+    d = request.json or {}
+    if not (d.get('text') or '').strip():
+        return jsonify({'error': '내용을 입력하세요'}), 400
+    conn = get_db()
+    conn.execute('UPDATE band_quick_presets SET emoji=?, text=? WHERE id=?',
+                 ((d.get('emoji') or '').strip(), d['text'].strip(), pid))
+    conn.commit()
+    row = conn.execute('SELECT * FROM band_quick_presets WHERE id=?', (pid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)) if row else ('', 404)
+
+
+@app.route('/api/band/quickpresets/<pid>', methods=['DELETE'])
+def band_delete_quickpreset(pid):
+    conn = get_db()
+    conn.execute('DELETE FROM band_quick_presets WHERE id=?', (pid,))
     conn.commit()
     conn.close()
     return jsonify({'ok': True})

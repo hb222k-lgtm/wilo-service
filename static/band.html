@@ -94,11 +94,21 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 
 /* Quick request buttons */
 .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 16px}
-.quick-btn{border:none;background:var(--card);border-radius:14px;padding:16px 10px;font-size:14px;
+.quick-cell{position:relative}
+.quick-btn{width:100%;border:none;background:var(--card);border-radius:14px;padding:16px 10px;font-size:14px;
   font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08);color:var(--text);
-  display:flex;flex-direction:column;align-items:center;gap:7px;font-family:inherit}
+  display:flex;flex-direction:column;align-items:center;gap:7px;font-family:inherit;min-height:88px;justify-content:center;text-align:center}
 .quick-btn:active{background:var(--bg)}
 .quick-btn .emoji{font-size:26px}
+.quick-cell.editing .quick-btn{border:1.5px dashed var(--primary)}
+.quick-cell .qp-del{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;
+  border:none;background:var(--danger);color:#fff;font-size:14px;cursor:pointer;display:none;
+  align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3);z-index:2}
+.quick-cell.editing .qp-del{display:flex}
+.quick-add{border:2px dashed var(--border);background:none;border-radius:14px;color:var(--primary);
+  font-size:15px;font-weight:700;cursor:pointer;min-height:88px;font-family:inherit}
+.edit-toggle{border:none;background:none;color:var(--primary);font-size:14px;font-weight:700;
+  cursor:pointer;font-family:inherit;padding:2px 4px;text-transform:none;letter-spacing:0}
 
 /* Request rows */
 .req-row{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start}
@@ -253,13 +263,11 @@ canvas.anno.off{pointer-events:none;touch-action:auto}
       <h1>방송실 요청</h1>
       <button class="btn-icon" onclick="openCustomRequest()">+</button>
     </div>
-    <div class="section-label">빠른 요청 (누르면 바로 전송)</div>
-    <div class="quick-grid">
-      <button class="quick-btn" onclick="sendQuick('모니터 소리 키워주세요')"><span class="emoji">🔊</span>모니터 소리<br>키워주세요</button>
-      <button class="quick-btn" onclick="sendQuick('모니터 소리 줄여주세요')"><span class="emoji">🔉</span>모니터 소리<br>줄여주세요</button>
-      <button class="quick-btn" onclick="sendQuick('마이크가 안 들려요')"><span class="emoji">🎤</span>마이크가<br>안 들려요</button>
-      <button class="quick-btn" onclick="sendQuick('하울링(삐- 소리)이 나요')"><span class="emoji">⚠️</span>하울링이<br>나요</button>
+    <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;padding-right:16px">
+      <span id="quickLabel">빠른 요청 (누르면 바로 전송)</span>
+      <button class="edit-toggle" id="quickEditBtn" onclick="toggleQuickEdit()">편집</button>
     </div>
+    <div class="quick-grid" id="quickGrid"></div>
     <div class="section-label">요청 내역</div>
     <div class="card" id="requestList"></div>
   </div>
@@ -377,6 +385,21 @@ canvas.anno.off{pointer-events:none;touch-action:auto}
   </div>
 </div>
 
+<!-- 빠른 요청 버튼 편집 모달 -->
+<div class="modal-bg" id="quickPresetModal">
+  <div class="modal">
+    <div class="modal-header"><h2 id="quickPresetTitle">빠른 요청 추가</h2><button class="modal-close" onclick="closeModal('quickPresetModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>아이콘 (이모지, 선택)</label><input id="qpEmoji" maxlength="4" placeholder="예) 🔊  🎤  ⚠️"></div>
+      <div class="form-group"><label>버튼 내용 *</label><input id="qpText" placeholder="예) 2번 마이크 켜주세요"></div>
+      <button class="btn btn-primary" onclick="saveQuickPreset()">저장</button>
+      <div class="btn-row" id="qpDeleteRow" style="display:none">
+        <button class="btn btn-danger" onclick="deleteQuickPreset()">이 버튼 삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 메모 모달 -->
 <div class="modal-bg" id="noteModal">
   <div class="modal">
@@ -418,7 +441,7 @@ canvas.anno.off{pointer-events:none;touch-action:auto}
     <button id="penClearBtn" onclick="clearAnnotations()" style="display:none">🗑 지우기</button>
     <button id="penBtn" onclick="togglePen()">✏️ 필기</button>
   </div>
-  <div id="penHint" hidden>✏️ 필기 켜짐 — 악보 위에 손가락으로 쓰면 팀원 화면에도 보여요 (넘길 땐 필기 끄기)</div>
+  <div id="penHint" hidden>✏️ 필기 켜짐 — 한 손가락으로 쓰고, 두 손가락으로 크기 조절해요 (팀원 화면에도 보여요)</div>
   <div id="viewerBody"><div id="sheetWrap"></div></div>
 </div>
 <input type="file" id="pageAddInput" accept="image/*" multiple onchange="addPagesToSong()">
@@ -466,7 +489,7 @@ function switchTab(name){
   document.getElementById('content').scrollTop = 0;
   if (name === 'songs') loadSongs();
   if (name === 'setlists') loadSetlists();
-  if (name === 'requests') loadRequests();
+  if (name === 'requests'){ loadRequests(); loadQuickPresets(); }
   if (name === 'notes') loadNotes();
 }
 
@@ -1019,6 +1042,68 @@ async function loadRequests(){
     </div>`).join('');
 }
 
+// 빠른 요청 버튼 (팀 공유 · 편집 가능)
+let quickPresets = [];
+let quickEditing = false;
+let editingPresetId = null;
+
+async function loadQuickPresets(){
+  quickPresets = await api.get('/api/band/quickpresets');
+  renderQuickPresets();
+}
+
+function renderQuickPresets(){
+  const grid = document.getElementById('quickGrid');
+  grid.innerHTML = quickPresets.map(p => `
+    <div class="quick-cell ${quickEditing ? 'editing' : ''}">
+      <button class="quick-btn" onclick="${quickEditing ? `openPresetModal('${p.id}')` : `sendQuick('${esc(p.text).replace(/'/g, "\\'")}')`}">
+        ${p.emoji ? `<span class="emoji">${esc(p.emoji)}</span>` : ''}${esc(p.text)}
+      </button>
+      <button class="qp-del" onclick="deletePresetDirect('${p.id}')">✕</button>
+    </div>`).join('')
+    + (quickEditing ? `<button class="quick-add" onclick="openPresetModal()">＋ 버튼 추가</button>` : '');
+}
+
+function toggleQuickEdit(){
+  quickEditing = !quickEditing;
+  document.getElementById('quickEditBtn').textContent = quickEditing ? '완료' : '편집';
+  document.getElementById('quickLabel').textContent = quickEditing
+    ? '버튼을 눌러 수정 / ✕로 삭제 / ＋로 추가' : '빠른 요청 (누르면 바로 전송)';
+  renderQuickPresets();
+}
+
+function openPresetModal(id){
+  editingPresetId = id || null;
+  const p = id ? quickPresets.find(x => x.id === id) : null;
+  document.getElementById('quickPresetTitle').textContent = p ? '빠른 요청 수정' : '빠른 요청 추가';
+  document.getElementById('qpEmoji').value = p ? (p.emoji || '') : '';
+  document.getElementById('qpText').value = p ? p.text : '';
+  document.getElementById('qpDeleteRow').style.display = p ? 'flex' : 'none';
+  openModal('quickPresetModal');
+}
+
+async function saveQuickPreset(){
+  const text = document.getElementById('qpText').value.trim();
+  if (!text) return toast('버튼 내용을 입력하세요');
+  const body = {emoji: document.getElementById('qpEmoji').value.trim(), text};
+  if (editingPresetId) await api.put('/api/band/quickpresets/' + editingPresetId, body);
+  else await api.post('/api/band/quickpresets', body);
+  closeModal('quickPresetModal');
+  loadQuickPresets();
+}
+
+async function deleteQuickPreset(){
+  await api.del('/api/band/quickpresets/' + editingPresetId);
+  closeModal('quickPresetModal');
+  loadQuickPresets();
+}
+
+async function deletePresetDirect(id){
+  if (!confirm('이 빠른 요청 버튼을 삭제할까요?')) return;
+  await api.del('/api/band/quickpresets/' + id);
+  loadQuickPresets();
+}
+
 async function sendQuick(msg){
   await api.post('/api/band/requests', {sender: myName(), message: msg});
   toast('방송실에 요청을 보냈어요 📨');
@@ -1105,22 +1190,26 @@ async function deleteNote(){
   loadNotes();
 }
 
-// ── 악보 크기 조절 (확대/축소) ─────────────────────────
-const ZOOM_STEPS = [60, 80, 100, 130, 160, 200, 250, 300];
+// ── 악보 크기 조절 (버튼 + 두 손가락 핀치) ─────────────
+const ZOOM_MIN = 50, ZOOM_MAX = 400;
 let zoomPct = parseInt(localStorage.getItem('band_zoom') || '100', 10);
 
 function applyZoom(){
-  if (!ZOOM_STEPS.includes(zoomPct)) zoomPct = 100;
+  zoomPct = Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomPct)));
   document.getElementById('sheetWrap').style.width = zoomPct + '%';
   document.getElementById('zoomLabel').textContent = zoomPct + '%';
   relayoutAnnotations();
 }
 
 function zoomBy(dir){
-  let i = ZOOM_STEPS.indexOf(zoomPct);
-  if (i < 0) i = 2;
-  i = Math.max(0, Math.min(ZOOM_STEPS.length - 1, i + dir));
-  zoomPct = ZOOM_STEPS[i];
+  // 버튼: 대략 20%씩 단계 이동
+  const steps = [50, 60, 80, 100, 130, 160, 200, 250, 300, 350, 400];
+  let i = steps.findIndex(s => s >= zoomPct);
+  if (i < 0) i = steps.length - 1;
+  if (dir > 0 && steps[i] <= zoomPct) i++;
+  if (dir < 0) i--;
+  i = Math.max(0, Math.min(steps.length - 1, i));
+  zoomPct = steps[i];
   localStorage.setItem('band_zoom', zoomPct);
   applyZoom();
 }
@@ -1237,23 +1326,64 @@ function annoPoint(cv, e){
            Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) ];
 }
 const sheetWrapEl = document.getElementById('sheetWrap');
+const viewerBodyEl = document.getElementById('viewerBody');
+const activePointers = new Map();   // pointerId → {x,y}
+let pinch = null;                   // 두 손가락 확대 상태
+
+const ptDist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const ptMid  = (a, b) => ({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2});
+
+function cancelCurrentStroke(){
+  if (curStroke && curPid && annos[curPid]){
+    const i = annos[curPid].indexOf(curStroke);
+    if (i >= 0) annos[curPid].splice(i, 1);
+    if (curCanvas) drawStrokes(curCanvas, annos[curPid]);
+  }
+  curStroke = null; curCanvas = null; curPid = null; drawingPid = null;
+}
+
 sheetWrapEl.addEventListener('pointerdown', e => {
   if (!penOn) return;
   const cv = e.target.closest('canvas.anno');
   if (!cv) return;
-  const wrap = cv.closest('[data-pid]');
-  curCanvas = cv; curPid = wrap.dataset.pid; drawingPid = curPid;
+  activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+
+  if (activePointers.size >= 2){          // 두 손가락 → 확대/축소
+    cancelCurrentStroke();
+    const [a, b] = [...activePointers.values()];
+    pinch = {d0: ptDist(a, b), z0: zoomPct, mid0: ptMid(a, b),
+             sl0: viewerBodyEl.scrollLeft, st0: viewerBodyEl.scrollTop};
+    e.preventDefault();
+    return;
+  }
+  // 한 손가락 → 그리기 시작
+  curCanvas = cv; curPid = cv.closest('[data-pid]').dataset.pid; drawingPid = curPid;
   curStroke = [annoPoint(cv, e)];
   (annos[curPid] = annos[curPid] || []).push(curStroke);
-  cv.setPointerCapture(e.pointerId);
   e.preventDefault();
 });
+
 sheetWrapEl.addEventListener('pointermove', e => {
-  if (!curStroke || !curCanvas) return;
-  curStroke.push(annoPoint(curCanvas, e));
-  drawStrokes(curCanvas, annos[curPid]);
-  e.preventDefault();
+  if (!penOn) return;
+  if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+
+  if (pinch && activePointers.size >= 2){
+    const [a, b] = [...activePointers.values()];
+    zoomPct = pinch.z0 * (ptDist(a, b) / pinch.d0);
+    applyZoom();
+    const m = ptMid(a, b);               // 두 손가락 중심 이동만큼 따라 스크롤(팬)
+    viewerBodyEl.scrollLeft = pinch.sl0 - (m.x - pinch.mid0.x);
+    viewerBodyEl.scrollTop  = pinch.st0 - (m.y - pinch.mid0.y);
+    e.preventDefault();
+    return;
+  }
+  if (curStroke && curCanvas){
+    curStroke.push(annoPoint(curCanvas, e));
+    drawStrokes(curCanvas, annos[curPid]);
+    e.preventDefault();
+  }
 });
+
 function endStroke(){
   if (!curStroke) return;
   const pid = curPid;
@@ -1261,8 +1391,17 @@ function endStroke(){
   curStroke = null; curCanvas = null; curPid = null;
   saveAnnotation(pid).finally(() => { drawingPid = null; });
 }
-sheetWrapEl.addEventListener('pointerup', endStroke);
-sheetWrapEl.addEventListener('pointercancel', endStroke);
+
+function onPointerEnd(e){
+  activePointers.delete(e.pointerId);
+  if (pinch && activePointers.size < 2){
+    pinch = null;
+    localStorage.setItem('band_zoom', Math.round(zoomPct));
+  }
+  if (activePointers.size === 0) endStroke();
+}
+sheetWrapEl.addEventListener('pointerup', onPointerEnd);
+sheetWrapEl.addEventListener('pointercancel', onPointerEnd);
 window.addEventListener('resize', () => { clearTimeout(relayoutAnnotations._t); relayoutAnnotations._t = setTimeout(relayoutAnnotations, 150); });
 
 // 인도자가 화면을 넘기면(스크롤) 위치 전송
@@ -1280,6 +1419,7 @@ setInterval(() => { if (!document.hidden) checkLive(); }, 3000);
 // ── 시작 ──────────────────────────────────────────────
 loadSongs();
 loadRequests();
+loadQuickPresets();
 </script>
 </body>
 </html>

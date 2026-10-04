@@ -210,6 +210,59 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
   box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .stat-card .num{font-size:28px;font-weight:700;color:var(--primary)}
 .stat-card .label{font-size:12px;color:var(--sub);margin-top:2px}
+
+/* Documents */
+.chips{display:flex;gap:6px;padding:4px 16px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.chip{border:1px solid var(--border);background:var(--card);border-radius:20px;padding:6px 14px;
+  font-size:13px;font-weight:600;color:var(--sub);white-space:nowrap;cursor:pointer;font-family:inherit}
+.chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.doc-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.doc-type-btn{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:18px 10px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text)}
+.doc-type-btn span{font-size:28px}
+.doc-type-btn:active{background:var(--bg)}
+.edit-section{background:var(--card);border-radius:12px;margin:10px 16px;padding:14px 14px 4px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.edit-section h3{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.item-row{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;position:relative}
+.item-row .grid{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:8px;margin-top:8px}
+.item-row input{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:15px;
+  outline:none;font-family:inherit;background:#fff;color:var(--text)}
+.item-row input:focus{border-color:var(--primary)}
+.item-row .amt{font-size:13px;color:var(--sub);margin-top:6px;text-align:right}
+.item-row .rm{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;border:none;
+  background:#c7c7cc;color:#fff;font-size:15px;cursor:pointer;line-height:24px}
+.mini-label{font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:600}
+.totals-box{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.totals-box div{display:flex;justify-content:space-between;padding:2px 0}
+.totals-box .grand{font-weight:700;font-size:16px;color:var(--primary);border-top:1px solid var(--border);margin-top:4px;padding-top:6px}
+.dropdown{position:fixed;z-index:950;background:#fff;border:1px solid var(--border);border-radius:10px;
+  max-height:240px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.15);display:none}
+.dropdown .opt{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px}
+.dropdown .opt:last-child{border-bottom:none}
+.dropdown .opt:active,.dropdown .opt:hover{background:var(--bg)}
+.dropdown .opt small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+.ph-group{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px}
+.ph-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.ph-slot{position:relative}
+.ph-slot img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;display:block;background:var(--bg)}
+.ph-slot input{width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:13px;margin-top:4px;text-align:center;font-family:inherit}
+.ph-slot .del-btn{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:#fff;
+  border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer}
+.ph-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.pick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.pick-grid .pk{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;cursor:pointer;border:3px solid transparent}
+.pick-grid .pk img{width:100%;height:100%;object-fit:cover}
+.pick-grid .pk.sel{border-color:var(--primary)}
+.pick-grid .pk .n{position:absolute;top:4px;right:4px;background:var(--primary);color:#fff;border-radius:50%;
+  width:22px;height:22px;font-size:12px;font-weight:700;display:none;align-items:center;justify-content:center}
+.pick-grid .pk.sel .n{display:flex}
+.inp{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:15px;
+  outline:none;font-family:inherit;background:#fff;color:var(--text)}
+.inp:focus{border-color:var(--primary)}
+.btn-row{display:flex;gap:8px;margin:10px 16px}
+.btn-row .btn{flex:1;font-size:15px;padding:12px 8px}
+details.client summary{cursor:pointer;font-size:14px;font-weight:700;padding-bottom:12px;list-style:none}
+details.client summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
@@ -271,6 +324,43 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
       <div id="memo-list"></div>
     </div>
 
+    <!-- ── DOCUMENTS ── -->
+    <div id="page-docs" class="page">
+      <div class="topbar">
+        <h1>문서</h1>
+        <div style="display:flex;gap:8px">
+          <button class="btn-icon" style="background:var(--bg);color:var(--text);font-size:17px;border:1px solid var(--border)" onclick="App.navigate('doc-settings')" title="설정">⚙</button>
+          <button class="btn-icon" onclick="App.showDocTypePicker()">+</button>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="search" id="doc-search" placeholder="공사명, 거래처, 현장 검색" oninput="App.searchDocs(this.value)">
+        </div>
+      </div>
+      <div class="chips" id="doc-chips"></div>
+      <div id="docs-list"></div>
+    </div>
+
+    <div id="page-doc-edit" class="page">
+      <div class="topbar">
+        <button style="background:none;border:none;color:var(--primary);font-size:16px;cursor:pointer;font-weight:500" onclick="App.leaveDocEdit()">← 뒤로</button>
+        <h1 id="doc-edit-title" style="font-size:17px">문서</h1>
+        <button class="btn btn-primary btn-sm" onclick="App.saveDoc()">저장</button>
+      </div>
+      <div id="doc-edit-content"></div>
+    </div>
+
+    <div id="page-doc-settings" class="page">
+      <div class="topbar">
+        <button style="background:none;border:none;color:var(--primary);font-size:16px;cursor:pointer;font-weight:500" onclick="App.navigate('docs')">← 뒤로</button>
+        <h1 style="font-size:17px">문서 설정</h1>
+        <span style="width:50px"></span>
+      </div>
+      <div id="doc-settings-content"></div>
+    </div>
+
     <div id="page-search" class="page">
       <div class="topbar"><h1>검색</h1></div>
       <div class="search-wrap">
@@ -301,6 +391,10 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
       메모
     </button>
+    <button class="nav-btn" data-page="docs" onclick="App.navigate('docs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+      문서
+    </button>
     <button class="nav-btn" data-page="search" onclick="App.navigate('search')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       검색
@@ -323,6 +417,44 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
     </div>
   </div>
 </div>
+
+<!-- Doc type picker -->
+<div class="modal-bg" id="modal-doctype">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>새 문서</h2>
+      <button class="modal-close" onclick="App.closeModal('modal-doctype')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="doc-type-grid">
+        <button class="doc-type-btn" onclick="App.newDoc('quote')"><span>📝</span>견적서</button>
+        <button class="doc-type-btn" onclick="App.newDoc('statement')"><span>🧾</span>거래명세서</button>
+        <button class="doc-type-btn" onclick="App.newDoc('contract')"><span>🤝</span>계약서</button>
+        <button class="doc-type-btn" onclick="App.newDoc('completion')"><span>✅</span>작업완료확인서</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Site photo picker (작업완료확인서) -->
+<div class="modal-bg" id="modal-photopick">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>현장 사진 선택</h2>
+      <button class="modal-close" onclick="App.closeModal('modal-photopick')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--sub);margin-bottom:10px">누른 순서대로 들어갑니다 (작업전 → 작업중 → 작업 완료)</div>
+      <div class="pick-grid" id="photopick-grid"></div>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="App.confirmPhotoPick()">추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="dropdown" id="dropdown"></div>
+<input type="file" id="docPhotoInput" accept="image/*" multiple style="display:none">
+<input type="file" id="stampInput" accept="image/*" style="display:none">
+<input type="file" id="priceFileInput" accept=".xlsx" style="display:none">
 
 <!-- Lightbox -->
 <div id="lightbox" onclick="this.classList.remove('open')">
@@ -435,8 +567,20 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
   </div>
 </div>
 
+<script src="/doc-utils.js"></script>
 <script>
 const TODAY = new Date().toISOString().slice(0,10);
+
+// ── 문서 종류 ───────────────────────────────────────────────────────────────
+const DOC_TYPES = {
+  quote:      {name:'견적서',         short:'견적서', icon:'📝', client:'수신',            date:'견적일자'},
+  statement:  {name:'거래명세서',     short:'명세서', icon:'🧾', client:'공급받는자 상호', date:'거래일자'},
+  contract:   {name:'공사도급계약서', short:'계약서', icon:'🤝', client:'발주처',          date:'계약일자'},
+  completion: {name:'작업완료확인서', short:'완료서', icon:'✅', client:'발주처',          date:'확인일자'},
+};
+const PHOTO_CAPTIONS = ['작업전', '작업중', '작업 완료'];
+const CLIENT_FIELDS = [['biz_no','사업자번호'],['ceo','대표자'],['address','주소'],['tel','연락처'],['fax','팩스']];
+const blankItem = () => ({name:'', spec:'ea', qty:1, price:0});
 
 // ── 오프라인 큐 ────────────────────────────────────────────────────────────
 const Queue = {
@@ -574,7 +718,7 @@ const App = {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const nb = document.querySelector(`.nav-btn[data-page="${page}"]`);
+    const nb = document.querySelector(`.nav-btn[data-page="${page.startsWith('doc') ? 'docs' : page}"]`);
     if(nb) nb.classList.add('active');
     this.currentPage = page;
 
@@ -583,6 +727,8 @@ const App = {
     else if(page === 'detail' && siteId) this.renderDetail(siteId);
     else if(page === 'schedule') this.renderSchedule();
     else if(page === 'memo') this.renderMemo();
+    else if(page === 'docs') this.renderDocs();
+    else if(page === 'doc-settings') this.renderDocSettings();
     else if(page === 'search') document.getElementById('global-search').focus();
 
     window.scrollTo(0,0);
@@ -786,6 +932,7 @@ const App = {
       <div class="tabs">
         <div class="tab ${tab==='info'?'active':''}" onclick="App.switchTab('info')">정보</div>
         <div class="tab ${tab==='visits'?'active':''}" onclick="App.switchTab('visits')">방문기록 <span class="badge badge-blue">${visits.length}</span></div>
+        <div class="tab ${tab==='docs'?'active':''}" onclick="App.switchTab('docs')">문서</div>
       </div>`;
 
     if(tab === 'info') {
@@ -835,12 +982,18 @@ const App = {
             <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:8px">
               <button class="btn btn-sm btn-outline" onclick="App.triggerPhotoForVisit('${v.id}')">📷 사진 추가</button>
               <button class="btn btn-sm btn-outline" onclick="App.editVisit('${v.id}')">편집</button>
+              <button class="btn btn-sm btn-outline" onclick="App.completionFromVisit('${v.id}')">📄 완료서</button>
               <button class="btn btn-sm" style="background:#fff3e0;color:#c05800" onclick="App.deleteVisit('${v.id}')">삭제</button>
             </div>
           </div>`;
         });
         html += `</div>`;
       }
+    } else if(tab === 'docs') {
+      html += `<div class="doc-type-grid" style="padding:12px 16px 4px">
+        ${Object.entries(DOC_TYPES).map(([k,t]) => `<button class="doc-type-btn" style="padding:12px 8px;flex-direction:row;justify-content:center;font-size:14px" onclick="App.newDoc('${k}', App.currentSite.id)"><span style="font-size:20px">${t.icon}</span>${t.short} 작성</button>`).join('')}
+      </div><div id="site-docs"><div class="empty" style="padding:24px"><p>불러오는 중...</p></div></div>`;
+      setTimeout(() => this.renderSiteDocs(site.id), 0);
     }
 
     document.getElementById('detail-content').innerHTML = html;
@@ -1509,6 +1662,631 @@ const App = {
     this._pendingDeleteMemoId = id;
   },
 
+  // ── DOCUMENTS ─────────────────────────────────────────────────────────
+  docFilter: '',
+  doc: null,
+
+  async loadCompany(force) {
+    if(!this.company || force) this.company = await API.get('/settings/company').catch(() => this.company || {});
+    return this.company;
+  },
+
+  async renderDocs() {
+    document.getElementById('doc-chips').innerHTML = [['','전체'], ...Object.entries(DOC_TYPES).map(([k,t]) => [k,t.short])]
+      .map(([k,label]) => `<button class="chip ${this.docFilter===k?'active':''}" onclick="App.setDocFilter('${k}')">${label}</button>`).join('');
+    const el = document.getElementById('docs-list');
+    const q = document.getElementById('doc-search').value.trim();
+    try {
+      const docs = await API.get('/documents?' + new URLSearchParams({type:this.docFilter, q}));
+      el.innerHTML = docs.length
+        ? `<div class="card">${docs.map(d => this.docRowHtml(d)).join('')}</div>`
+        : `<div class="empty"><div class="icon">📄</div><p>문서가 없습니다<br>+ 버튼으로 새 문서를 만드세요</p></div>`;
+    } catch(e) {
+      el.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>문서를 불러올 수 없습니다</p></div>`;
+    }
+  },
+
+  setDocFilter(k) { this.docFilter = k; this.renderDocs(); },
+
+  searchDocs() {
+    clearTimeout(this._docSearchTimer);
+    this._docSearchTimer = setTimeout(() => this.renderDocs(), 250);
+  },
+
+  docRowHtml(d) {
+    const t = DOC_TYPES[d.doc_type];
+    const amount = ['quote','statement'].includes(d.doc_type) ? d.supply_amount + d.tax_amount : d.supply_amount;
+    return `<div class="card-row" onclick="App.openDoc('${d.id}')">
+      <div class="icon" style="background:var(--bg)">${t.icon}</div>
+      <div class="info">
+        <div class="title">${esc(d.title || '(공사명 없음)')}</div>
+        <div class="sub">${t.short} · ${esc(d.client_name || d.site_name || '')} · ${d.doc_date}${amount ? ' · ₩' + won(amount) : ''}</div>
+      </div>
+      <span class="chevron">›</span>
+    </div>`;
+  },
+
+  async renderSiteDocs(siteId) {
+    const el = document.getElementById('site-docs');
+    if(!el) return;
+    const docs = await API.get('/documents?site_id=' + siteId).catch(() => []);
+    el.innerHTML = docs.length
+      ? `<div class="card">${docs.map(d => this.docRowHtml(d)).join('')}</div>`
+      : `<div class="empty" style="padding:24px"><p>이 현장의 문서가 없습니다</p></div>`;
+  },
+
+  showDocTypePicker() { this.openModal('modal-doctype'); },
+
+  defaultDocData(type, co) {
+    const client = {};
+    if(type === 'quote') return {client, items:[blankItem()], valid_until:'', note: co.quote_note || ''};
+    if(type === 'statement') return {client, items:[blankItem()], note:''};
+    if(type === 'contract') return {client, vat_mode:'excluded', perf_bond:'생 략', defect_bond:'10%',
+      warranty:'준공일로부터 6개월', delay_rate:'계약금액(VAT 포함) × (1/1000) × 총 지체일수',
+      start_date:'', end_date:'', etc_note:'', attachments:'1. 견적서'};
+    return {client, vat_mode:'excluded', contract_date:'', start_date:TODAY, end_date:TODAY,
+      photo_layout:'grid', photos:[], groups:[{title:'', photos:[]}]};
+  },
+
+  async newDoc(type, siteId) {
+    this.closeModal('modal-doctype');
+    const co = await this.loadCompany();
+    await this.openDocEditor({id:null, doc_type:type, site_id:null, title:'', client_name:'', doc_date:TODAY,
+      supply_amount:0, tax_amount:0, source_id:null, data:this.defaultDocData(type, co)});
+    if(siteId) await this.docPickSite(siteId);
+  },
+
+  async openDoc(id) {
+    try {
+      const d = await API.get('/documents/' + id);
+      delete d.company;
+      await this.openDocEditor(d);
+    } catch(e) { this.toast('문서를 열 수 없습니다', 'warn'); }
+  },
+
+  async openDocEditor(doc) {
+    if(this.currentPage !== 'doc-edit') {
+      this._docReturn = this.currentPage === 'detail' && this.currentSite ? this.currentSite.id : null;
+    }
+    this.doc = JSON.parse(JSON.stringify(doc));
+    this._docDirty = !doc.id;
+    if(!this.sites.length) this.sites = await API.get('/sites').catch(() => []);
+    this.navigate('doc-edit');
+    this.renderDocEditor();
+  },
+
+  leaveDocEdit() {
+    if(this._docDirty && !confirm('저장하지 않은 내용이 있습니다. 나갈까요?')) return;
+    this.hideDropdown();
+    this.doc = null;
+    if(this._docReturn) { this.currentTab = 'docs'; this.navigate('detail', this._docReturn); }
+    else this.navigate('docs');
+  },
+
+  // 입력칸 하나 (data-k 경로로 this.doc에 자동 반영)
+  _f(label, key, opts={}) {
+    const v = getPath(this.doc, key);
+    const val = opts.num ? (v ? won(v) : '') : (v ?? '');
+    const ph = esc(opts.ph || '');
+    if(opts.area) return `<div class="form-group"><label>${label}</label><textarea data-k="${key}" placeholder="${ph}" style="min-height:60px">${esc(val)}</textarea></div>`;
+    return `<div class="form-group"><label>${label}</label><input type="${opts.type||'text'}" data-k="${key}"
+      ${opts.num ? 'data-num="1" inputmode="numeric"' : ''} value="${esc(val)}" placeholder="${ph}"></div>`;
+  },
+
+  renderDocEditor() {
+    const d = this.doc, t = DOC_TYPES[d.doc_type];
+    const site = this.sites.find(s => s.id === d.site_id);
+    const hasItems = !!d.data.items;
+    document.getElementById('doc-edit-title').textContent = (d.id ? '' : '새 ') + t.name;
+
+    let html = `<div class="edit-section">
+      <h3>기본 정보 ${d.doc_no ? `<span class="badge badge-blue">${esc(d.doc_no)}</span>` : ''}</h3>
+      <div class="form-group"><label>현장 (선택하면 거래처 정보 자동 입력)</label>
+        <input type="text" id="doc-site-input" value="${esc(site ? site.name : '')}" placeholder="현장명 검색..."
+          autocomplete="off" oninput="App.docSiteSearch(this)" onfocus="App.docSiteSearch(this)"></div>
+      ${this._f(t.client + ' *', 'client_name', {ph:'예) 옥정역 로제비앙메트로파크1단지 입주자대표회의'})}
+      ${this._f('공사명', 'title', {ph:'예) 급수펌프 소음 수리'})}
+      <div class="form-row">
+        ${this._f(t.date, 'doc_date', {type:'date'})}
+        ${d.doc_type === 'quote' ? this._f('유효기간', 'data.valid_until', {ph:'예) 견적 후 30일'}) : ''}
+        ${d.doc_type === 'completion' ? this._f('계약일자', 'data.contract_date', {type:'date'}) : ''}
+      </div>
+      <details class="client" ${['statement','contract'].includes(d.doc_type) ? 'open' : ''}>
+        <summary>거래처 상세 ▾ <span style="font-weight:400;color:var(--sub);font-size:12px">사업자번호 · 대표자 · 주소 · 연락처</span></summary>
+        <div class="form-row">${this._f('사업자번호', 'data.client.biz_no')}${this._f('대표자', 'data.client.ceo')}</div>
+        ${this._f('주소', 'data.client.address')}
+        <div class="form-row">${this._f('연락처', 'data.client.tel')}${this._f('팩스', 'data.client.fax')}</div>
+      </details>
+    </div>`;
+
+    if(hasItems) {
+      html += `<div class="edit-section"><h3>품목</h3>${this.itemsHtml()}</div>
+        <div class="edit-section">${this._f('비고', 'data.note', {area:true})}</div>`;
+    } else {
+      html += `<div class="edit-section"><h3>계약 금액 · 기간</h3>
+        <div class="form-row">
+          ${this._f('계약금액 (원)', 'supply_amount', {num:true, ph:'784,700'})}
+          <div class="form-group"><label>부가세</label>
+            <select data-k="data.vat_mode">
+              <option value="excluded" ${d.data.vat_mode !== 'included' ? 'selected' : ''}>부가세별도</option>
+              <option value="included" ${d.data.vat_mode === 'included' ? 'selected' : ''}>부가세포함</option>
+            </select></div>
+        </div>
+        <div class="totals-box" id="doc-totals"></div>
+        <div class="form-row">${this._f('착공일', 'data.start_date', {type:'date'})}${this._f('준공일', 'data.end_date', {type:'date'})}</div>
+      </div>`;
+    }
+
+    if(d.doc_type === 'contract') {
+      html += `<div class="edit-section"><h3>계약 조건</h3>
+        <div class="form-row">${this._f('계약이행보증금', 'data.perf_bond')}${this._f('하자이행보증금', 'data.defect_bond')}</div>
+        ${this._f('하자담보기간', 'data.warranty')}
+        ${this._f('지체상금율', 'data.delay_rate')}
+        ${this._f('기타사항', 'data.etc_note', {area:true})}
+        ${this._f('붙임서류', 'data.attachments')}
+      </div>`;
+    }
+
+    if(d.doc_type === 'completion') {
+      const grid = (d.data.photo_layout || 'rows') === 'grid';
+      html += `<div class="edit-section"><h3>작업 사진</h3>
+        <div class="chips" style="padding:0 0 12px">
+          <button class="chip ${grid ? 'active' : ''}" onclick="App.setPhotoLayout('grid')">사진만 모아서</button>
+          <button class="chip ${grid ? '' : 'active'}" onclick="App.setPhotoLayout('rows')">항목별 (작업전·중·완료)</button>
+        </div>
+        ${grid ? this.gridPhotosHtml() : this.groupsHtml()}</div>`;
+    }
+
+    html += `<div class="btn-row"><button class="btn btn-primary" onclick="App.saveDoc(true)">🖨 저장하고 미리보기 · 다운로드</button></div>`;
+    if(d.id) {
+      const others = Object.keys(DOC_TYPES).filter(k => k !== d.doc_type);
+      html += `<div class="section-label">이 내용으로 새 문서 만들기</div>
+        <div class="btn-row">${others.map(k => `<button class="btn btn-outline" onclick="App.convertDoc('${k}')">${DOC_TYPES[k].icon} ${DOC_TYPES[k].short}</button>`).join('')}</div>
+        <div class="btn-row"><button class="btn btn-outline" style="color:var(--danger)" onclick="App.deleteDoc()">문서 삭제</button></div>`;
+    }
+    html += `<div style="height:24px"></div>`;
+
+    document.getElementById('doc-edit-content').innerHTML = html;
+    this.updateDocTotals();
+  },
+
+  itemsHtml() {
+    return this.doc.data.items.map((it, i) => `<div class="item-row">
+      <button class="rm" onclick="App.docRemoveItem(${i})">×</button>
+      <input data-k="data.items.${i}.name" value="${esc(it.name)}" placeholder="품목명 (모델명 입력하면 단가표 검색)"
+        autocomplete="off" oninput="App.priceSearch(this, ${i})">
+      <div class="grid">
+        <div><div class="mini-label">규격</div><input data-k="data.items.${i}.spec" value="${esc(it.spec)}"></div>
+        <div><div class="mini-label">수량</div><input data-k="data.items.${i}.qty" data-num="1" inputmode="decimal" value="${esc(it.qty)}"></div>
+        <div><div class="mini-label">단가</div><input data-k="data.items.${i}.price" data-num="1" inputmode="numeric" value="${it.price ? won(it.price) : ''}"></div>
+      </div>
+      <div class="amt" id="item-amt-${i}"></div>
+    </div>`).join('') + `
+      <button class="btn btn-outline" style="margin-bottom:12px;padding:10px;font-size:14px" onclick="App.docAddItem()">+ 품목 추가</button>
+      <div class="totals-box" id="doc-totals"></div>`;
+  },
+
+  groupsHtml() {
+    const groups = this.doc.data.groups;
+    return groups.map((g, gi) => `<div class="ph-group">
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="inp" data-k="data.groups.${gi}.title" value="${esc(g.title)}" placeholder="작업 항목 (예: 배수펌프 교체)" style="flex:1">
+        ${groups.length > 1 ? `<button class="btn btn-sm" style="background:#fff3e0;color:#c05800" onclick="App.docRemoveGroup(${gi})">삭제</button>` : ''}
+      </div>
+      ${g.photos.length ? `<div class="ph-slots">${g.photos.map((p, pi) => `<div class="ph-slot">
+        <img src="/api/thumb/${p.folder}/${p.filename}" onclick="App.openLightbox('/api/photo/${p.folder}/${p.filename}')">
+        <button class="del-btn" onclick="App.docRemovePhoto(${gi},${pi})">×</button>
+        <input data-k="data.groups.${gi}.photos.${pi}.caption" value="${esc(p.caption)}">
+      </div>`).join('')}</div>` : ''}
+      ${g.photos.length < 3 ? `<div class="ph-actions">
+        ${this.doc.site_id ? `<button class="btn btn-sm btn-outline" onclick="App.openPhotoPick(${gi})">🏗 현장 사진에서</button>` : ''}
+        <button class="btn btn-sm btn-outline" onclick="App.docUploadPhoto(${gi})">📷 사진 올리기</button>
+      </div>` : ''}
+    </div>`).join('') + `
+      <button class="btn btn-outline" style="padding:10px;font-size:14px" onclick="App.docAddGroup()">+ 작업 항목 추가</button>
+      <div style="font-size:12px;color:var(--sub);margin:8px 0 12px">항목마다 사진 3장 (작업전 · 작업중 · 작업 완료). 사진 페이지 한 장에 3개 항목씩 들어갑니다.</div>`;
+  },
+
+  gridPhotosHtml() {
+    const photos = this.doc.data.photos || [];
+    return `${photos.length ? `<div class="ph-slots" style="grid-template-columns:repeat(4,1fr)">${photos.map((p, i) => `<div class="ph-slot">
+        <img src="/api/thumb/${p.folder}/${p.filename}" onclick="App.openLightbox('/api/photo/${p.folder}/${p.filename}')">
+        <button class="del-btn" onclick="App.docRemoveGridPhoto(${i})">×</button></div>`).join('')}</div>` : ''}
+      <div class="ph-actions">
+        ${this.doc.site_id ? `<button class="btn btn-sm btn-outline" onclick="App.openPhotoPick(0)">🏗 현장 사진에서</button>` : ''}
+        <button class="btn btn-sm btn-outline" onclick="App.docUploadPhoto(0)">📷 사진 올리기</button>
+      </div>
+      <div style="font-size:12px;color:var(--sub);margin:8px 0 12px">사진 ${photos.length}장 · 한 페이지에 최대 12장, 사진 수에 맞춰 크기가 자동으로 정해집니다.</div>`;
+  },
+
+  docRemoveGridPhoto(i) {
+    this.doc.data.photos.splice(i, 1);
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  // 사진 배치 바꾸기 — 이미 넣은 사진은 그대로 옮긴다
+  setPhotoLayout(mode) {
+    const d = this.doc.data;
+    if((d.photo_layout || 'rows') === mode) return;
+    if(mode === 'grid') {
+      d.photos = (d.groups || []).flatMap(g => g.photos.map(p => ({folder: p.folder, filename: p.filename})));
+    } else {
+      const photos = d.photos || [];
+      d.groups = [];
+      for(let i = 0; i < photos.length; i += 3) {
+        d.groups.push({title:'', photos: photos.slice(i, i+3).map((p, j) => ({...p, caption: PHOTO_CAPTIONS[j]}))});
+      }
+      if(!d.groups.length) d.groups.push({title:'', photos:[]});
+    }
+    d.photo_layout = mode;
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  computeDocAmounts() {
+    const d = this.doc;
+    if(d.data.items) {
+      const t = sumItems(d.data.items);
+      d.supply_amount = t.supply; d.tax_amount = t.tax;
+    } else {
+      d.tax_amount = d.data.vat_mode === 'included' ? 0 : Math.round((+d.supply_amount||0) * 0.1);
+    }
+  },
+
+  updateDocTotals() {
+    const d = this.doc, box = document.getElementById('doc-totals');
+    if(!d || !box) return;
+    this.computeDocAmounts();
+    if(d.data.items) {
+      d.data.items.forEach((it, i) => {
+        const el = document.getElementById('item-amt-' + i);
+        const a = Math.round((+it.qty||0) * (+it.price||0));
+        if(el) el.textContent = a ? `공급가액 ${won(a)} · 부가세 ${won(Math.round(a*0.1))}` : '';
+      });
+      const total = d.supply_amount + d.tax_amount;
+      box.innerHTML = `<div><span>공급가액</span><span>${won(d.supply_amount)}</span></div>
+        <div><span>VAT</span><span>${won(d.tax_amount)}</span></div>
+        <div class="grand"><span>합계</span><span>₩${won(total)}</span></div>
+        ${total ? `<div style="font-size:12px;color:var(--sub)"><span>금 액 : ${korNum(total)}원 정</span></div>` : ''}`;
+    } else {
+      const amt = +d.supply_amount || 0;
+      box.innerHTML = amt
+        ? `<div style="font-weight:600">일금 ${korNum(amt)} 원정 (₩${won(amt)}, ${d.data.vat_mode === 'included' ? '부가세포함' : '부가세별도'})</div>`
+        : `<div style="color:var(--sub)">금액을 입력하면 한글 금액이 표시됩니다</div>`;
+    }
+  },
+
+  onDocInput(e) {
+    const el = e.target, k = el.dataset && el.dataset.k;
+    if(!k || !this.doc) return;
+    const v = el.dataset.num ? (Number(el.value.replace(/[^\d.]/g, '')) || 0) : el.value;
+    setPath(this.doc, k, v);
+    this._docDirty = true;
+    this.updateDocTotals();
+  },
+
+  docAddItem() { this.doc.data.items.push(blankItem()); this.renderDocEditor(); },
+  docRemoveItem(i) {
+    this.doc.data.items.splice(i, 1);
+    if(!this.doc.data.items.length) this.doc.data.items.push(blankItem());
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+  docAddGroup() { this.doc.data.groups.push({title:'', photos:[]}); this.renderDocEditor(); },
+  docRemoveGroup(gi) {
+    if(this.doc.data.groups[gi].photos.length && !confirm('이 항목과 사진을 문서에서 뺄까요?')) return;
+    this.doc.data.groups.splice(gi, 1);
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+  docRemovePhoto(gi, pi) {
+    this.doc.data.groups[gi].photos.splice(pi, 1);
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  // 사진을 항목에 추가 — 3장이 넘으면 같은 제목의 다음 항목으로 이어서
+  addPhotosToGroup(gi, photos) {
+    if(this.doc.data.photo_layout === 'grid') {
+      this.doc.data.photos = (this.doc.data.photos || []).concat(photos.map(p => ({folder: p.folder, filename: p.filename})));
+      this._docDirty = true;
+      this.renderDocEditor();
+      return;
+    }
+    const groups = this.doc.data.groups;
+    photos.forEach(p => {
+      let g = groups[gi];
+      if(g.photos.length >= 3) {
+        groups.splice(gi + 1, 0, {title: g.title, photos: []});
+        gi++; g = groups[gi];
+      }
+      g.photos.push({...p, caption: PHOTO_CAPTIONS[g.photos.length]});
+    });
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  docUploadPhoto(gi) {
+    this._docPhotoGroup = gi;
+    document.getElementById('docPhotoInput').click();
+  },
+
+  async openPhotoPick(gi) {
+    this._pickGroup = gi;
+    this._picked = [];
+    const grid = document.getElementById('photopick-grid');
+    grid.innerHTML = '<p style="color:var(--sub)">불러오는 중...</p>';
+    this.openModal('modal-photopick');
+    const photos = await API.get('/sites/' + this.doc.site_id + '/photos').catch(() => []);
+    this._pickPhotos = photos.slice().reverse();  // 오래된 사진부터 (작업전 → 작업 완료)
+    grid.innerHTML = this._pickPhotos.length
+      ? this._pickPhotos.map((p, i) => `<div class="pk" id="pk-${i}" onclick="App.togglePick(${i})">
+          <img src="/api/thumb/${p.site_id}/${p.filename}" loading="lazy"><div class="n"></div></div>`).join('')
+      : '<p style="color:var(--sub);grid-column:1/-1">이 현장에 저장된 사진이 없습니다</p>';
+  },
+
+  togglePick(i) {
+    const at = this._picked.indexOf(i);
+    if(at >= 0) this._picked.splice(at, 1); else this._picked.push(i);
+    this._pickPhotos.forEach((_, j) => {
+      const el = document.getElementById('pk-' + j);
+      const n = this._picked.indexOf(j);
+      el.classList.toggle('sel', n >= 0);
+      el.querySelector('.n').textContent = n >= 0 ? n + 1 : '';
+    });
+  },
+
+  confirmPhotoPick() {
+    const photos = this._picked.map(i => ({folder: this._pickPhotos[i].site_id, filename: this._pickPhotos[i].filename}));
+    this.closeModal('modal-photopick');
+    if(photos.length) this.addPhotosToGroup(this._pickGroup, photos);
+  },
+
+  // ── 드롭다운 (현장 검색 / 단가표 검색) ──
+  showDropdown(input, html) {
+    const dd = document.getElementById('dropdown');
+    if(!html) { this.hideDropdown(); return; }
+    this._ddInput = input;
+    dd.innerHTML = html;
+    this.positionDropdown();
+    dd.style.display = 'block';
+  },
+  positionDropdown() {
+    const dd = document.getElementById('dropdown');
+    if(!this._ddInput) return;
+    const r = this._ddInput.getBoundingClientRect();
+    dd.style.left = r.left + 'px';
+    dd.style.width = r.width + 'px';
+    dd.style.top = (r.bottom + 4) + 'px';
+  },
+  hideDropdown() {
+    document.getElementById('dropdown').style.display = 'none';
+    this._ddInput = null;
+  },
+
+  docSiteSearch(input) {
+    const q = input.value.trim().toLowerCase();
+    const list = this.sites.filter(s => !q || s.name.toLowerCase().includes(q) || (s.address||'').toLowerCase().includes(q)).slice(0, 30);
+    let html = this.doc.site_id ? `<div class="opt" style="color:var(--danger)" onclick="App.docClearSite()">현장 선택 해제</div>` : '';
+    html += list.map(s => `<div class="opt" onclick="App.docPickSite('${s.id}')">${esc(s.name)}${s.address ? `<small>${esc(s.address)}</small>` : ''}</div>`).join('');
+    this.showDropdown(input, html || `<div class="opt" style="color:var(--sub)">검색 결과 없음</div>`);
+  },
+
+  docClearSite() {
+    this.hideDropdown();
+    this.doc.site_id = null;
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  async docPickSite(siteId) {
+    this.hideDropdown();
+    let site = this.sites.find(s => s.id === siteId);
+    if(!site) {
+      site = await API.get('/sites/' + siteId).catch(() => null);
+      if(site) this.sites.push(site);
+    }
+    if(!site || !this.doc) return;
+    const d = this.doc, c = d.data.client;
+    d.site_id = site.id;
+    // 같은 현장의 이전 문서에서 거래처 정보(사업자번호, 대표자 등) 이어받기
+    const prev = (await API.get('/documents?site_id=' + site.id).catch(() => [])).find(x => x.id !== d.id && x.client_name);
+    if(prev) {
+      d.client_name = d.client_name || prev.client_name;
+      CLIENT_FIELDS.forEach(([k]) => { c[k] = c[k] || (prev.data.client || {})[k] || ''; });
+    }
+    d.client_name = d.client_name || site.name;
+    c.address = c.address || site.address || '';
+    c.tel = c.tel || site.contact_phone || '';
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  priceSearch(input, i) {
+    clearTimeout(this._priceTimer);
+    const q = input.value.trim();
+    if(q.length < 2) { this.hideDropdown(); return; }
+    this._priceTimer = setTimeout(async () => {
+      try {
+        const r = await fetch('/api/price-items?q=' + encodeURIComponent(q));
+        const {items} = await r.json();
+        this._priceResults = items;
+        this.showDropdown(input, items.map((p, n) => `<div class="opt" onclick="App.applyPrice(${i}, ${n})">${esc(p.model)}
+          <small>${esc(p.category||'')}${p.price ? ' · 소비자가 ' + won(p.price) : ''}${p.cost_price ? ' · 물품대 ' + won(p.cost_price) : ''}</small></div>`).join(''));
+      } catch(e) {}
+    }, 200);
+  },
+
+  applyPrice(i, n) {
+    const p = this._priceResults[n], it = this.doc.data.items[i];
+    this.hideDropdown();
+    it.name = p.model;
+    it.spec = it.spec || (p.unit || 'ea').toLowerCase();
+    it.price = p.price || p.cost_price || 0;
+    this._docDirty = true;
+    this.renderDocEditor();
+  },
+
+  async saveDoc(preview) {
+    const d = this.doc;
+    if(!d.client_name.trim()) { this.toast(DOC_TYPES[d.doc_type].client + '을(를) 입력하세요', 'warn'); return; }
+    this.computeDocAmounts();
+    if(d.data.items) {
+      d.data.items = d.data.items.filter(it => it.name || it.price);
+      if(!d.data.items.length) d.data.items.push(blankItem());
+    }
+    const body = {doc_type:d.doc_type, site_id:d.site_id, title:d.title, client_name:d.client_name, doc_date:d.doc_date,
+      supply_amount:d.supply_amount, tax_amount:d.tax_amount, data:d.data, source_id:d.source_id};
+    try {
+      const saved = d.id ? await API.put('/documents/' + d.id, body) : await API.post('/documents', body);
+      if(saved._queued) { this.toast('📵 오프라인 — 문서는 온라인에서만 저장됩니다', 'warn'); return; }
+      this.doc = saved;
+      this._docDirty = false;
+      if(preview) { location.href = '/print.html?id=' + saved.id; return; }
+      this.toast('저장됐습니다');
+      this.renderDocEditor();
+    } catch(e) { this.toast('저장 실패: ' + e.message, 'warn'); }
+  },
+
+  async deleteDoc() {
+    if(!confirm('이 문서를 삭제할까요?')) return;
+    try {
+      await API.del('/documents/' + this.doc.id);
+      this._docDirty = false;
+      this.toast('삭제됐습니다');
+      this.leaveDocEdit();
+    } catch(e) { this.toast('삭제 실패', 'warn'); }
+  },
+
+  // 견적서 → 계약서/명세서/완료서 처럼 내용을 이어받아 새 문서 작성
+  async convertDoc(toType) {
+    if(this._docDirty) await this.saveDoc();
+    if(this._docDirty) return;
+    const src = this.doc, co = await this.loadCompany();
+    const data = this.defaultDocData(toType, co);
+    data.client = {...src.data.client};
+    if(data.items) {
+      data.items = src.data.items
+        ? JSON.parse(JSON.stringify(src.data.items))
+        : [{name: src.title, spec:'식', qty:1, price: src.supply_amount}];
+    }
+    if(src.data.vat_mode && data.vat_mode) data.vat_mode = src.data.vat_mode;
+    ['start_date','end_date'].forEach(k => { if(src.data[k] && k in data) data[k] = src.data[k]; });
+    if(toType === 'completion') data.contract_date = src.doc_type === 'contract' ? src.doc_date : (src.data.contract_date || '');
+    await this.openDocEditor({id:null, doc_type:toType, site_id:src.site_id, title:src.title, client_name:src.client_name,
+      doc_date:TODAY, supply_amount:src.supply_amount, tax_amount:src.tax_amount, source_id:src.id, data});
+    this.toast(`${DOC_TYPES[src.doc_type].short} 내용을 가져왔습니다 — 확인 후 저장하세요`);
+  },
+
+  // 방문기록(작업내용 + 사진) → 작업완료확인서
+  async completionFromVisit(visitId) {
+    const v = (this.currentVisits || []).find(x => x.id === visitId), site = this.currentSite;
+    if(!v || !site) return;
+    const co = await this.loadCompany();
+    const data = this.defaultDocData('completion', co);
+    const title = (v.work_content || '').split('\n')[0].trim();
+    const photos = this.currentPhotos.filter(p => p.visit_id === visitId).reverse();
+    data.start_date = data.end_date = v.visit_date;
+    data.photos = photos.map(p => ({folder: site.id, filename: p.filename}));
+    data.groups = [{title, photos: []}];
+    await this.openDocEditor({id:null, doc_type:'completion', site_id:null, title, client_name:'', doc_date:v.visit_date,
+      supply_amount:0, tax_amount:0, source_id:null, data});
+    await this.docPickSite(site.id);
+  },
+
+  // ── 문서 설정 (회사 정보 · 직인 · 단가표) ──
+  async renderDocSettings() {
+    const el = document.getElementById('doc-settings-content');
+    el.innerHTML = `<div class="empty" style="padding:32px"><p>불러오는 중...</p></div>`;
+    const co = await this.loadCompany(true);
+    const prices = await fetch('/api/price-items?manual=1').then(r => r.json()).catch(() => ({items:[], total:0}));
+    const f = (label, k, ph='') => `<div class="form-group"><label>${label}</label><input id="co-${k}" value="${esc(co[k])}" placeholder="${esc(ph)}"></div>`;
+    el.innerHTML = `
+      <div class="edit-section"><h3>회사 정보 <span style="font-weight:400;font-size:12px;color:var(--sub)">모든 문서에 들어갑니다</span></h3>
+        <div class="form-row">${f('상호','name')}${f('대표자','ceo')}</div>
+        ${f('사업자번호','biz_no')}
+        ${f('주소','address')}
+        <div class="form-row">${f('전화','tel')}${f('팩스','fax')}</div>
+        <div class="form-row">${f('휴대폰 (담당자)','mobile')}${f('이메일','email')}</div>
+        <div class="form-row">${f('업태','biz_type')}${f('종목','biz_item')}</div>
+        ${f('입금계좌 (거래명세서 하단)','bank','예) 기업은행 917-036865-01-016 윌로펌프서비스(강한빛)')}
+        <div class="form-group"><label>견적서 기본 비고</label><textarea id="co-quote_note" style="min-height:60px">${esc(co.quote_note)}</textarea></div>
+        <button class="btn btn-primary" style="margin-bottom:14px" onclick="App.saveCompany()">회사 정보 저장</button>
+      </div>
+      <div class="edit-section"><h3>직인 (도장)</h3>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+          ${co.has_stamp ? `<img src="/api/stamp?t=${Date.now()}" style="width:64px;height:64px;object-fit:contain;border:1px solid var(--border);border-radius:8px">`
+            : `<div style="width:64px;height:64px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px">없음</div>`}
+          <div style="flex:1;font-size:13px;color:var(--sub)">배경이 투명한 PNG가 가장 깔끔합니다</div>
+          <button class="btn btn-sm btn-outline" onclick="document.getElementById('stampInput').click()">${co.has_stamp ? '변경' : '등록'}</button>
+        </div>
+      </div>
+      <div class="edit-section"><h3>단가표 <span class="badge badge-blue">${prices.total}개</span></h3>
+        <div style="font-size:13px;color:var(--sub);margin-bottom:10px;line-height:1.5">윌로 가격표 엑셀(.xlsx)을 불러오면 견적서·명세서에서 모델명으로 검색해 소비자가가 자동 입력됩니다. 다시 불러오면 이전 엑셀 단가표만 교체되고, 아래에 직접 추가한 품목은 유지됩니다.</div>
+        <button class="btn btn-outline" style="margin-bottom:14px;padding:11px;font-size:15px" onclick="document.getElementById('priceFileInput').click()">📊 엑셀 단가표 불러오기</button>
+        <div class="form-group"><label>단가표 검색</label>
+          <input id="price-search" placeholder="모델명 검색 (예: PB-350)" oninput="App.settingsPriceSearch(this.value)"></div>
+        <div id="price-search-results" style="margin-bottom:10px"></div>
+        <label style="display:block;font-size:13px;font-weight:600;color:var(--sub);margin-bottom:6px">직접 추가한 품목 (인건비, 부자재 등)</label>
+        <div id="manual-prices">${this.priceListHtml(prices.items, true)}</div>
+        <div class="item-row" style="margin-top:8px">
+          <input id="np-model" placeholder="품목명 (예: 인건비)">
+          <div class="grid"><div><div class="mini-label">규격</div><input id="np-unit" value="식"></div>
+            <div style="grid-column:span 2"><div class="mini-label">단가</div><input id="np-price" inputmode="numeric" placeholder="200,000"></div></div>
+          <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="App.addManualPrice()">+ 품목 추가</button>
+        </div>
+      </div>
+      <div style="height:24px"></div>`;
+  },
+
+  priceListHtml(items, deletable) {
+    if(!items.length) return `<div style="font-size:13px;color:var(--sub);padding:4px 0 8px">없음</div>`;
+    return items.map(p => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px">
+      <div style="flex:1;min-width:0"><div style="font-weight:500">${esc(p.model)}</div>
+        <div style="font-size:12px;color:var(--sub)">${esc(p.category || p.unit || '')}${p.cost_price ? ' · 물품대 ' + won(p.cost_price) : ''}</div></div>
+      <div style="font-weight:600">${p.price ? won(p.price) : '-'}</div>
+      ${deletable || p.source === 'manual' ? `<button class="btn btn-sm" style="background:#fff3e0;color:#c05800;padding:4px 10px" onclick="App.deletePrice('${p.id}')">삭제</button>` : ''}
+    </div>`).join('');
+  },
+
+  settingsPriceSearch(q) {
+    clearTimeout(this._spTimer);
+    const el = document.getElementById('price-search-results');
+    if(q.trim().length < 2) { el.innerHTML = ''; return; }
+    this._spTimer = setTimeout(async () => {
+      const {items} = await fetch('/api/price-items?q=' + encodeURIComponent(q.trim())).then(r => r.json()).catch(() => ({items:[]}));
+      el.innerHTML = items.length ? this.priceListHtml(items, false) : `<div style="font-size:13px;color:var(--sub)">검색 결과 없음</div>`;
+    }, 200);
+  },
+
+  async addManualPrice() {
+    const model = document.getElementById('np-model').value.trim();
+    if(!model) { this.toast('품목명을 입력하세요', 'warn'); return; }
+    try {
+      await API.post('/price-items', {model, unit: document.getElementById('np-unit').value.trim(),
+        price: Number(document.getElementById('np-price').value.replace(/[^\d]/g, '')) || null});
+      this.toast('추가됐습니다');
+      this.renderDocSettings();
+    } catch(e) { this.toast('추가 실패', 'warn'); }
+  },
+
+  async deletePrice(id) {
+    if(!confirm('이 품목을 단가표에서 삭제할까요?')) return;
+    await API.del('/price-items/' + id).catch(() => {});
+    this.renderDocSettings();
+  },
+
+  async saveCompany() {
+    const body = {};
+    ['name','ceo','biz_no','address','tel','fax','mobile','email','biz_type','biz_item','bank','quote_note']
+      .forEach(k => body[k] = document.getElementById('co-' + k).value);
+    try {
+      this.company = await API.put('/settings/company', body);
+      this.toast('회사 정보가 저장됐습니다');
+    } catch(e) { this.toast('저장 실패: ' + e.message, 'warn'); }
+  },
+
   toast(msg, type='ok') {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -1526,6 +2304,13 @@ function fmtDate(d) {
   if(!d) return '-';
   const dt = new Date(d + 'T00:00:00');
   return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일`;
+}
+// 'data.items.2.qty' 같은 경로로 문서 객체 읽기/쓰기
+function getPath(o, path) { return path.split('.').reduce((x, k) => x == null ? x : x[k], o); }
+function setPath(o, path, v) {
+  const ks = path.split('.');
+  const last = ks.pop();
+  ks.reduce((x, k) => x[k], o)[last] = v;
 }
 function fmtDatetime(d) {
   if(!d) return '-';
@@ -1591,6 +2376,68 @@ document.getElementById('photoInput').addEventListener('change', async function(
   this.value = '';
 });
 
+// ── 문서 편집 ─────────────────────────────────────────────────────────────
+const docEditEl = document.getElementById('doc-edit-content');
+docEditEl.addEventListener('input', e => App.onDocInput(e));
+docEditEl.addEventListener('change', e => App.onDocInput(e));
+// 금액 칸은 입력을 마치면 천 단위 쉼표로 정리
+docEditEl.addEventListener('focusout', e => {
+  const el = e.target;
+  if(el.dataset && el.dataset.num && el.dataset.k && !el.dataset.k.endsWith('.qty')) {
+    const v = getPath(App.doc, el.dataset.k);
+    el.value = v ? won(v) : '';
+  }
+});
+document.addEventListener('pointerdown', e => {
+  const dd = document.getElementById('dropdown');
+  if(App._ddInput && !dd.contains(e.target) && e.target !== App._ddInput) App.hideDropdown();
+});
+document.getElementById('content').addEventListener('scroll', () => App.positionDropdown(), {passive:true});
+
+document.getElementById('docPhotoInput').addEventListener('change', async function() {
+  const files = Array.from(this.files);
+  this.value = '';
+  if(!files.length || !App.doc) return;
+  App.toast('사진 업로드 중...');
+  const uploaded = [];
+  for(const file of files) {
+    const fd = new FormData();
+    fd.append('photo', file);
+    try { uploaded.push(await API.upload('/documents/photos', fd)); }
+    catch(e) { App.toast('사진 업로드 실패: ' + (e.message||'오류'), 'warn'); }
+  }
+  if(uploaded.length) App.addPhotosToGroup(App._docPhotoGroup, uploaded);
+});
+
+document.getElementById('stampInput').addEventListener('change', async function() {
+  const file = this.files[0];
+  this.value = '';
+  if(!file) return;
+  const fd = new FormData();
+  fd.append('photo', file);
+  try {
+    await API.upload('/settings/stamp', fd);
+    App.toast('직인이 등록됐습니다');
+    App.renderDocSettings();
+  } catch(e) { App.toast('직인 등록 실패', 'warn'); }
+});
+
+document.getElementById('priceFileInput').addEventListener('change', async function() {
+  const file = this.files[0];
+  this.value = '';
+  if(!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  App.toast('단가표 불러오는 중...');
+  try {
+    const r = await fetch('/api/price-items/import', {method:'POST', body:fd});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || '오류');
+    App.toast(`단가표 ${j.count}개 품목을 불러왔습니다`);
+    App.renderDocSettings();
+  } catch(e) { App.toast('불러오기 실패: ' + e.message, 'warn'); }
+});
+
 // ── Modal close on backdrop click ─────────────────────────────────────────
 document.querySelectorAll('.modal-bg').forEach(bg => {
   bg.addEventListener('click', e => { if(e.target===bg) bg.classList.remove('open'); });
@@ -1610,6 +2457,12 @@ window.addEventListener('offline', () => App.setOffline(true));
 
 // ── Init ──────────────────────────────────────────────────────────────────
 App.renderHome();
+// 인쇄 화면에서 돌아오면 그 문서를 다시 연다 (/#doc=<id>)
+if(location.hash.startsWith('#doc=')) {
+  const docId = location.hash.slice(5);
+  history.replaceState(null, '', '/');
+  App.openDoc(docId);
+}
 // 앱 시작 시 미동기화 항목 처리
 if(Queue.count()) setTimeout(() => App.syncQueue(), 2000);
 </script>

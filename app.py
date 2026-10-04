@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from PIL import Image, ImageOps
 import sqlite3, os, uuid, io, json
@@ -153,6 +153,36 @@ def init_db():
             emoji TEXT,
             text TEXT NOT NULL,
             position INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+        CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            doc_type TEXT NOT NULL,
+            doc_no TEXT,
+            site_id TEXT,
+            title TEXT,
+            client_name TEXT,
+            doc_date TEXT,
+            supply_amount INTEGER DEFAULT 0,
+            tax_amount INTEGER DEFAULT 0,
+            data TEXT,
+            source_id TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
+        );
+        CREATE TABLE IF NOT EXISTS price_items (
+            id TEXT PRIMARY KEY,
+            category TEXT,
+            model TEXT NOT NULL,
+            unit TEXT DEFAULT 'EA',
+            cost_price INTEGER,
+            price INTEGER,
+            memo TEXT,
+            source TEXT DEFAULT 'manual'
         );
     ''')
     conn.commit()
@@ -616,6 +646,353 @@ def delete_memo(mid):
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
+
+
+# ── Settings (회사 정보 / 직인) ──────────────────────────────────────────────
+
+DEFAULT_COMPANY = {
+    'name': '윌로펌프서비스',
+    'biz_no': '780-29-01203',
+    'ceo': '강한빛',
+    'address': '경기도 양주시 부흥로 2061-8 1층 T3호',
+    'tel': '031-821-0613',
+    'fax': '031-821-0614',
+    'mobile': '010-4389-0613',
+    'email': 'wilopumpe@naver.com',
+    'biz_type': '도소매',
+    'biz_item': '그외기타기계장비외',
+    'bank': '',
+    'quote_note': '작업 중 타 부품의 이상 발생 시 추가 비용 발생할 수 있음.',
+}
+ASSET_DIR = os.path.join(DATA_DIR, 'assets')
+os.makedirs(ASSET_DIR, exist_ok=True)
+
+
+def load_company(conn):
+    row = conn.execute("SELECT value FROM settings WHERE key='company'").fetchone()
+    company = dict(DEFAULT_COMPANY)
+    if row:
+        company.update(json.loads(row['value']))
+    company['has_stamp'] = os.path.exists(os.path.join(ASSET_DIR, 'stamp.png'))
+    return company
+
+
+@app.route('/api/settings/company', methods=['GET'])
+def get_company():
+    conn = get_db()
+    company = load_company(conn)
+    conn.close()
+    return jsonify(company)
+
+
+@app.route('/api/settings/company', methods=['PUT'])
+def update_company():
+    d = request.json or {}
+    company = {k: (d.get(k) or '').strip() for k in DEFAULT_COMPANY}
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('company',?)",
+                 (json.dumps(company, ensure_ascii=False),))
+    conn.commit()
+    company = load_company(conn)
+    conn.close()
+    return jsonify(company)
+
+
+@app.route('/api/settings/stamp', methods=['POST'])
+def upload_stamp():
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    try:
+        img = Image.open(request.files['photo'].stream)
+        img = ImageOps.exif_transpose(img).convert('RGBA')
+        img.thumbnail((400, 400), Image.LANCZOS)
+        img.save(os.path.join(ASSET_DIR, 'stamp.png'), 'PNG')
+    except Exception:
+        return jsonify({'error': '이미지를 읽을 수 없습니다'}), 400
+    return jsonify({'ok': True})
+
+
+@app.route('/api/stamp')
+def serve_stamp():
+    resp = send_from_directory(ASSET_DIR, 'stamp.png')
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
+# ── Documents (견적서 / 거래명세서 / 계약서 / 작업완료확인서) ─────────────────
+
+DOC_PREFIX = {'quote': 'Q', 'statement': 'S', 'contract': 'C', 'completion': 'W'}
+
+
+def doc_row(r):
+    d = dict(r)
+    d['data'] = json.loads(d['data'] or '{}')
+    return d
+
+
+def next_doc_no(conn, doc_type, doc_date):
+    # 예) Q-2610-003 : 유형-연월-순번
+    prefix = f"{DOC_PREFIX[doc_type]}-{(doc_date or '')[2:4]}{(doc_date or '')[5:7]}-"
+    row = conn.execute('SELECT doc_no FROM documents WHERE doc_no LIKE ? ORDER BY doc_no DESC LIMIT 1',
+                       (prefix + '%',)).fetchone()
+    seq = int(row['doc_no'].rsplit('-', 1)[1]) + 1 if row else 1
+    return f'{prefix}{seq:03d}'
+
+
+def doc_fields(d):
+    return (d.get('site_id') or None, (d.get('title') or '').strip(), (d.get('client_name') or '').strip(),
+            d.get('doc_date') or datetime.now().strftime('%Y-%m-%d'),
+            int(d.get('supply_amount') or 0), int(d.get('tax_amount') or 0),
+            json.dumps(d.get('data') or {}, ensure_ascii=False))
+
+
+@app.route('/api/documents', methods=['GET'])
+def get_documents():
+    sql = '''SELECT d.*, s.name site_name FROM documents d
+             LEFT JOIN sites s ON d.site_id=s.id WHERE 1=1'''
+    args = []
+    if request.args.get('type'):
+        sql += ' AND d.doc_type=?'
+        args.append(request.args['type'])
+    if request.args.get('site_id'):
+        sql += ' AND d.site_id=?'
+        args.append(request.args['site_id'])
+    q = request.args.get('q', '').strip()
+    if q:
+        sql += ' AND (d.title LIKE ? OR d.client_name LIKE ? OR s.name LIKE ? OR d.doc_no LIKE ?)'
+        args += [f'%{q}%'] * 4
+    sql += ' ORDER BY d.doc_date DESC, d.created_at DESC LIMIT 300'
+    conn = get_db()
+    rows = conn.execute(sql, args).fetchall()
+    conn.close()
+    return jsonify([doc_row(r) for r in rows])
+
+
+@app.route('/api/documents', methods=['POST'])
+def create_document():
+    d = request.json or {}
+    if d.get('doc_type') not in DOC_PREFIX:
+        return jsonify({'error': '문서 종류가 올바르지 않습니다'}), 400
+    did = str(uuid.uuid4())
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    fields = doc_fields(d)
+    conn = get_db()
+    doc_no = next_doc_no(conn, d['doc_type'], fields[3])
+    conn.execute('''INSERT INTO documents (id,doc_type,doc_no,site_id,title,client_name,doc_date,
+                    supply_amount,tax_amount,data,source_id,created_at,updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 (did, d['doc_type'], doc_no, *fields, d.get('source_id'), now, now))
+    conn.commit()
+    row = conn.execute('SELECT * FROM documents WHERE id=?', (did,)).fetchone()
+    conn.close()
+    return jsonify(doc_row(row)), 201
+
+
+@app.route('/api/documents/<did>', methods=['GET'])
+def get_document(did):
+    conn = get_db()
+    row = conn.execute('''SELECT d.*, s.name site_name FROM documents d
+                          LEFT JOIN sites s ON d.site_id=s.id WHERE d.id=?''', (did,)).fetchone()
+    company = load_company(conn)
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    doc = doc_row(row)
+    doc['company'] = company
+    return jsonify(doc)
+
+
+@app.route('/api/documents/<did>', methods=['PUT'])
+def update_document(did):
+    d = request.json or {}
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    conn.execute('''UPDATE documents SET site_id=?,title=?,client_name=?,doc_date=?,
+                    supply_amount=?,tax_amount=?,data=?,updated_at=? WHERE id=?''',
+                 (*doc_fields(d), now, did))
+    conn.commit()
+    row = conn.execute('SELECT * FROM documents WHERE id=?', (did,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify(doc_row(row))
+
+
+@app.route('/api/documents/<did>', methods=['DELETE'])
+def delete_document(did):
+    conn = get_db()
+    conn.execute('DELETE FROM documents WHERE id=?', (did,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/documents/<did>/export/<fmt>')
+def export_document(did, fmt):
+    """엑셀(.xlsx) / 한글(.hwpx) 파일로 내려받기"""
+    import exports
+    if fmt not in ('xlsx', 'hwpx'):
+        return jsonify({'error': '지원하지 않는 형식입니다'}), 400
+    conn = get_db()
+    row = conn.execute('SELECT * FROM documents WHERE id=?', (did,)).fetchone()
+    company = load_company(conn)
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    doc = doc_row(row)
+    images = exports.Images(PHOTO_DIR, os.path.join(ASSET_DIR, 'stamp.png'),
+                            os.path.join(app.static_folder, 'wilo-partner-logo.png'))
+    blocks = exports.build_blocks(doc, company)
+    name = exports.TYPE_NAME[doc['doc_type']]
+    if fmt == 'xlsx':
+        data = exports.render_xlsx(blocks, images, name)
+        mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        data = exports.render_hwpx(blocks, images, name, page_border=doc['doc_type'] == 'completion')
+        mime = 'application/hwp+zip'
+    filename = f"{name}_{doc['client_name'] or ''}_{(doc['doc_date'] or '').replace('-', '')}.{fmt}"
+    for ch in '\\/:*?"<>|':
+        filename = filename.replace(ch, '')
+    return send_file(io.BytesIO(data), mimetype=mime, as_attachment=True, download_name=filename)
+
+
+@app.route('/api/documents/photos', methods=['POST'])
+def upload_document_photo():
+    """작업완료확인서에 직접 올리는 사진 (현장 사진과 별도 보관)"""
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    pid, filename = save_photo_file(request.files['photo'], 'docs')
+    if not pid:
+        return jsonify({'error': filename}), 400
+    return jsonify({'folder': 'docs', 'filename': filename}), 201
+
+
+# ── Price items (단가표) ─────────────────────────────────────────────────────
+
+def to_int(v):
+    if isinstance(v, (int, float)):
+        return int(v)
+    try:
+        return int(float(str(v).replace(',', '').strip()))
+    except (ValueError, TypeError):
+        return None
+
+
+@app.route('/api/price-items', methods=['GET'])
+def get_price_items():
+    q = request.args.get('q', '').strip()
+    conn = get_db()
+    if request.args.get('manual'):
+        rows = conn.execute("SELECT * FROM price_items WHERE source='manual' ORDER BY model").fetchall()
+    elif q:
+        rows = conn.execute('''SELECT * FROM price_items WHERE model LIKE ? OR category LIKE ? OR memo LIKE ?
+                               ORDER BY source='import', model LIMIT 30''',
+                            (f'%{q}%', f'%{q}%', f'%{q}%')).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM price_items ORDER BY source='import', category, model").fetchall()
+    total = conn.execute('SELECT COUNT(*) FROM price_items').fetchone()[0]
+    conn.close()
+    return jsonify({'items': [dict(r) for r in rows], 'total': total})
+
+
+@app.route('/api/price-items', methods=['POST'])
+def create_price_item():
+    d = request.json or {}
+    if not (d.get('model') or '').strip():
+        return jsonify({'error': '품목명을 입력하세요'}), 400
+    pid = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute('INSERT INTO price_items (id,category,model,unit,cost_price,price,memo,source) VALUES (?,?,?,?,?,?,?,?)',
+                 (pid, d.get('category', ''), d['model'].strip(), d.get('unit') or 'EA',
+                  to_int(d.get('cost_price')), to_int(d.get('price')), d.get('memo', ''), 'manual'))
+    conn.commit()
+    row = conn.execute('SELECT * FROM price_items WHERE id=?', (pid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/price-items/<pid>', methods=['PUT'])
+def update_price_item(pid):
+    d = request.json or {}
+    conn = get_db()
+    conn.execute('UPDATE price_items SET category=?,model=?,unit=?,cost_price=?,price=?,memo=? WHERE id=?',
+                 (d.get('category', ''), (d.get('model') or '').strip(), d.get('unit') or 'EA',
+                  to_int(d.get('cost_price')), to_int(d.get('price')), d.get('memo', ''), pid))
+    conn.commit()
+    row = conn.execute('SELECT * FROM price_items WHERE id=?', (pid,)).fetchone()
+    conn.close()
+    return jsonify(dict(row) if row else {})
+
+
+@app.route('/api/price-items/<pid>', methods=['DELETE'])
+def delete_price_item(pid):
+    conn = get_db()
+    conn.execute('DELETE FROM price_items WHERE id=?', (pid,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+def parse_price_workbook(f):
+    """윌로 가격표/단가표 엑셀에서 (분류, 모델명, 물품대, 소비자가) 추출.
+    시트마다 '모델명' 헤더를 찾고, 한 행에 표가 여러 개 나란히 있어도 처리한다."""
+    import openpyxl
+    wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+    items = []
+    for ws in wb.worksheets:
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+        header_idx = None
+        for i, r in enumerate(rows[:15]):
+            if any(isinstance(c, str) and c.replace(' ', '') == '모델명' for c in r):
+                header_idx = i
+                break
+        if header_idx is None:
+            continue
+        header = [(c or '').replace('\n', '').replace(' ', '') if isinstance(c, str) else '' for c in rows[header_idx]]
+        model_cols = [i for i, h in enumerate(header) if h == '모델명']
+        blocks = []
+        for n, m in enumerate(model_cols):
+            end = model_cols[n + 1] if n + 1 < len(model_cols) else len(header)
+            start = model_cols[n - 1] + 1 if n else 0
+            cost_cols = [i for i in range(m + 1, end) if '물품대' in header[i]]
+            price_col = next((i for i in range(m + 1, end) if '소비자가' in header[i]), None)
+            kind_col = next((i for i in range(start, m) if header[i] == '기종'), None)
+            blocks.append((m, cost_cols[-1] if cost_cols else None, price_col, kind_col))
+        title = ws.title.strip()
+        for m, cost_col, price_col, kind_col in blocks:
+            kind = ''
+            for r in rows[header_idx + 1:]:
+                if kind_col is not None and kind_col < len(r) and r[kind_col]:
+                    kind = ' '.join(str(r[kind_col]).split())
+                model = r[m] if m < len(r) else None
+                if not isinstance(model, str) or not model.strip():
+                    continue
+                price = to_int(r[price_col]) if price_col is not None and price_col < len(r) else None
+                cost = to_int(r[cost_col]) if cost_col is not None and cost_col < len(r) else None
+                if price is None and cost is None:
+                    continue
+                items.append((kind or title, model.strip(), cost, price))
+    return items
+
+
+@app.route('/api/price-items/import', methods=['POST'])
+def import_price_items():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    try:
+        items = parse_price_workbook(request.files['file'])
+    except Exception:
+        return jsonify({'error': '엑셀 파일을 읽을 수 없습니다 (.xlsx만 가능)'}), 400
+    if not items:
+        return jsonify({'error': "'모델명' 열을 찾지 못했습니다"}), 400
+    conn = get_db()
+    # 직접 입력한 품목(인건비 등)은 유지하고, 이전에 불러온 단가표만 교체
+    conn.execute("DELETE FROM price_items WHERE source='import'")
+    conn.executemany("INSERT INTO price_items (id,category,model,unit,cost_price,price,source) VALUES (?,?,?,'EA',?,?,'import')",
+                     [(str(uuid.uuid4()), c, m, cost, p) for c, m, cost, p in items])
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'count': len(items)})
 
 
 # ── Search ────────────────────────────────────────────────────────────────────

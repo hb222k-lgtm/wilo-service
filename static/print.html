@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문서 인쇄</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:0}
+html,body{background:#8a8a8e;font-family:'Noto Sans KR',-apple-system,sans-serif;color:#000;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* 화면 툴바 */
+.toolbar{position:sticky;top:0;z-index:10;background:#1c1c1e;color:#fff;display:flex;gap:8px;
+  align-items:center;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;flex-wrap:wrap}
+.toolbar .name{flex:1;font-size:14px;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toolbar button{border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.toolbar .primary{background:#0066cc;color:#fff}
+.toolbar .ghost{background:#3a3a3c;color:#fff}
+.toolbar .dl{display:flex;gap:6px;flex-wrap:wrap}
+.toolbar button:disabled{opacity:.6}
+.hint{color:#ddd;font-size:12px;text-align:center;padding:6px 12px}
+
+#pages{padding:12px 0 40px}
+.sheet{width:210mm;height:297mm;background:#fff;margin:0 auto 12px;padding:14mm 14mm 12mm;
+  position:relative;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.3);font-size:10pt}
+@media print{
+  html,body{background:#fff}
+  .toolbar,.hint{display:none}
+  #pages{padding:0;zoom:1 !important}
+  .sheet{margin:0;box-shadow:none;page-break-after:always;break-after:page}
+  .sheet:last-child{page-break-after:auto;break-after:auto}
+}
+
+/* 공통 표 */
+table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #777;padding:2px 6px;height:7.4mm;vertical-align:middle;font-weight:400}
+th,.lab{background:#efefef;text-align:center;font-weight:700;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.ctr{text-align:center}
+.title{font-size:23pt;font-weight:700;text-align:center;letter-spacing:.5em;text-decoration:underline;
+  text-underline-offset:6px;margin:2mm 0 6mm;padding-left:.5em}
+.logo{height:7mm}
+.stamp-wrap{position:relative;display:inline-block}
+.stamp{position:absolute;width:15mm;height:15mm;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.92}
+.vert{font-weight:700;background:#efefef;text-align:center;width:7mm;padding:0;line-height:1.5}
+.box{border:1px solid #777;padding:2mm 4mm}
+.amount-line{display:flex;justify-content:space-between;font-weight:700;font-size:11.5pt}
+.multiline{white-space:pre-wrap}
+
+/* 견적서/명세서 */
+.head-grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;align-items:end}
+.items td{height:7.2mm;font-size:9.5pt}
+.nw{white-space:nowrap;font-size:9pt;padding:2px 4px}
+.items th{height:7.6mm}
+.totals td{height:9mm}
+
+/* 계약서 */
+.contract{font-size:10.5pt}
+.contract td{height:9.6mm;padding:2px 8px}
+.contract td.ctr{white-space:nowrap;letter-spacing:-.02em}
+.contract .tt{font-size:17pt;font-weight:700;text-align:center;letter-spacing:.1em}
+.contract .sign td{border:none;height:auto;padding:1.4mm 0;vertical-align:top}
+
+/* 작업완료확인서 */
+.frame{position:absolute;inset:7mm;border:3px double #000;pointer-events:none}
+.wc-title{font-size:22pt;text-align:center;margin:30mm 0 12mm;letter-spacing:.15em}
+.wc-table{width:178mm;margin:0 auto}
+.wc-table td{border:none;border-bottom:2px solid #fff;background:#dfe5ee;height:11mm;font-size:11pt;padding:0 4mm}
+.wc-table td:first-child{width:30mm;white-space:nowrap}
+.wc-attach{font-size:12pt;margin:34mm 0 0 8mm}
+.wc-date{text-align:center;font-size:13pt;margin-top:14mm}
+.wc-sign{position:absolute;left:96mm;top:236mm;font-size:10.5pt;line-height:2}
+
+.ph-title{font-size:14pt;font-weight:700;text-align:center;margin:3mm 0 6mm}
+.ph-row{display:flex;gap:4mm;margin-bottom:5mm;align-items:stretch}
+.ph-label{width:9mm;font-weight:700;font-size:10.5pt;line-height:1.35;
+  display:flex;align-items:center;justify-content:center;text-align:center}
+.ph-cells{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}
+.ph-cell img{width:100%;height:68mm;object-fit:cover;display:block;background:#eee}
+.ph-cell .cap{text-align:center;font-size:10pt;margin-top:1.5mm;min-height:5mm}
+
+.err{color:#fff;text-align:center;padding:60px 20px;font-size:16px}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button class="ghost" onclick="goBack()">← 뒤로</button>
+  <div class="name" id="docName">불러오는 중...</div>
+  <div class="dl">
+    <button class="primary" id="btnPdf" onclick="downloadPdf()">⬇ PDF</button>
+    <button class="primary" onclick="downloadFile('xlsx')">⬇ 엑셀</button>
+    <button class="primary" onclick="downloadFile('hwpx')">⬇ 한글</button>
+    <button class="ghost" onclick="window.print()">🖨 인쇄</button>
+  </div>
+</div>
+<div class="hint">PDF · 엑셀(.xlsx) · 한글(.hwpx) 파일로 받아서 카톡이나 메일로 보낼 수 있습니다. 엑셀과 한글 파일은 열어서 고칠 수 있습니다</div>
+<div id="pages"></div>
+
+<script src="/doc-utils.js"></script>
+<script>
+const TYPE_NAME = {quote:'견적서', statement:'거래명세서', contract:'공사도급표준계약서', completion:'작업완료확인서'};
+
+function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dot(d){ return d ? d.replace(/-/g,'/') : ''; }
+function ymd(d, blank){
+  if(!d) return blank ? `${new Date().getFullYear()}년&nbsp;&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;&nbsp;일` : '';
+  const [y,m,dd] = d.split('-');
+  return `${y}년 ${m}월 ${dd}일`;
+}
+function ymdShort(d){ if(!d) return ''; const [y,m,dd]=d.split('-'); return `${y}년 ${+m}월 ${+dd}일`; }
+
+// 세로 글씨: 한 글자씩 줄바꿈 (PDF 변환에서도 그대로 보이도록 writing-mode 대신 사용)
+function vtext(s){ return String(s||'').split('').map(c => c === ' ' ? '<span style="display:block;height:.6em"></span>' : esc(c) + '<br>').join(''); }
+function stampImg(co, cls='stamp'){ return co.has_stamp ? `<img class="${cls}" src="/api/stamp">` : ''; }
+function coContact(co){ return `TEL ${esc(co.tel)}${co.fax ? ' / FAX ' + esc(co.fax) : ''}`; }
+
+// ── 견적서 ──────────────────────────────────────────────────────────────
+function renderQuote(doc, co){
+  const d = doc.data, c = d.client || {}, items = (d.items||[]).filter(it => it.name || it.price);
+  const t = sumItems(items);
+  const rows = Math.max(14, items.length);
+  let body = '';
+  for(let i=0;i<rows;i++){
+    const it = items[i];
+    if(!it){ body += `<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>`; continue; }
+    const a = Math.round((+it.qty||0)*(+it.price||0));
+    body += `<tr><td>${esc(it.name)}</td><td class="ctr">${esc(it.spec)}</td><td class="ctr">${esc(it.qty)}</td>
+      <td class="num">${won(it.price)}</td><td class="num">${won(a)}</td><td class="num">${won(Math.round(a*0.1))}</td></tr>`;
+  }
+  return `<div class="sheet">
+    <div class="title">견적서</div>
+    <div class="head-grid" style="margin-bottom:1mm">
+      <div>일 자 : ${dot(doc.doc_date)}</div>
+      <div style="text-align:right"><img class="logo" src="/wilo-partner-logo.png"></div>
+    </div>
+    <div class="head-grid" style="align-items:stretch">
+      <table>
+        <tr><td class="lab" style="width:20mm">수 신</td><td style="font-weight:500">${esc(doc.client_name)}</td></tr>
+        <tr><td class="lab">연락처</td><td>${c.tel ? 'TEL ' + esc(c.tel) : ''}${c.fax ? ' / FAX ' + esc(c.fax) : ''}</td></tr>
+        <tr><td class="lab">공사명</td><td>${esc(doc.title)}</td></tr>
+        <tr><td class="lab">유효기간</td><td>${esc(d.valid_until)}</td></tr>
+        <tr><td colspan="2" style="height:auto;padding:2mm 3mm;line-height:1.7;border-top:none">1. 귀사의 일익 번창하심을 기원합니다.<br>2. 하기와 같이 견적드리오니 검토하기 바랍니다.</td></tr>
+      </table>
+      <table>
+        <tr><td class="lab" style="width:22mm">상 호</td><td>${esc(co.name)} <span class="stamp-wrap">(인)${stampImg(co)}</span></td></tr>
+        <tr><td class="lab">주 소</td><td>${esc(co.address)}</td></tr>
+        <tr><td class="lab">사업자번호</td><td>${esc(co.biz_no)}</td></tr>
+        <tr><td class="lab">연락처</td><td style="line-height:1.9">${coContact(co)}<br>EMAIL&nbsp; ${esc(co.email)}</td></tr>
+        <tr><td class="lab">담당자</td><td>${esc(co.ceo)}&nbsp;&nbsp; ${esc(co.mobile)}</td></tr>
+      </table>
+    </div>
+    <div class="box amount-line" style="margin:3mm 0">
+      <span>금 액 : ${korNum(t.total)}원 정</span><span>(₩ ${won(t.total)}원)</span>
+    </div>
+    <table class="items">
+      <tr><th>품목명</th><th style="width:16mm">규격</th><th style="width:15mm">수량</th><th style="width:26mm">단가</th><th style="width:31mm">공급가액</th><th style="width:26mm">부가세</th></tr>
+      ${body}
+    </table>
+    <table class="totals" style="margin-top:2mm">
+      <tr><td class="lab" style="width:22mm">공급가액</td><td class="num">${won(t.supply)}</td>
+        <td class="lab" style="width:14mm">VAT</td><td class="num">${won(t.tax)}</td>
+        <td class="lab" style="width:16mm">합계</td><td class="num">${won(t.total)}</td></tr>
+    </table>
+    <table style="margin-top:2mm">
+      <tr><td class="lab" style="width:15mm;height:22mm">비고</td><td class="multiline" style="vertical-align:bottom;padding:2mm 3mm">${esc(d.note)}</td></tr>
+    </table>
+  </div>`;
+}
+
+// ── 거래명세서 ──────────────────────────────────────────────────────────
+function renderStatement(doc, co){
+  const d = doc.data, c = d.client || {}, items = (d.items||[]).filter(it => it.name || it.price);
+  const t = sumItems(items);
+  const rows = Math.max(14, items.length);
+  let body = '';
+  for(let i=0;i<rows;i++){
+    const it = items[i];
+    if(!it){ body += `<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`; continue; }
+    const a = Math.round((+it.qty||0)*(+it.price||0));
+    body += `<tr><td class="ctr">${i+1}</td><td>${esc(it.name)}</td><td class="ctr">${esc(it.spec)}</td><td class="ctr">${esc(it.qty)}</td>
+      <td class="num">${won(it.price)}</td><td class="num">${won(a)}</td><td class="num">${won(Math.round(a*0.1))}</td></tr>`;
+  }
+  return `<div class="sheet">
+    <div class="title" style="letter-spacing:.35em">거래명세서</div>
+    <div class="head-grid" style="margin-bottom:0">
+      <table style="width:70mm"><tr><td class="lab" style="width:20mm">일 자</td><td>${dot(doc.doc_date)}</td></tr></table>
+      <div style="text-align:right"><img class="logo" src="/wilo-partner-logo.png"></div>
+    </div>
+    <div class="head-grid" style="align-items:stretch;gap:4mm">
+      <table style="border-top:none">
+        <tr><td class="vert" rowspan="5">${vtext('공급받는자')}</td><td class="lab" style="width:18mm">상호</td><td colspan="3" style="font-weight:500">${esc(doc.client_name)}</td></tr>
+        <tr><td class="lab">사업자번호</td><td class="nw">${esc(c.biz_no)}</td><td class="lab" style="width:10mm">성명</td><td class="nw" style="width:15mm">${esc(c.ceo)}</td></tr>
+        <tr><td class="lab">주소</td><td colspan="3" style="font-size:9pt">${esc(c.address)}</td></tr>
+        <tr><td class="lab">연락처</td><td colspan="3">${esc(c.tel)}</td></tr>
+        <tr><td class="lab">공사명</td><td colspan="3" style="font-size:9pt">${esc(doc.title)}</td></tr>
+      </table>
+      <table>
+        <tr><td class="vert" rowspan="5">${vtext('공급자')}</td><td class="lab" style="width:18mm">상호</td><td colspan="3">${esc(co.name)}</td></tr>
+        <tr><td class="lab">사업자번호</td><td class="nw">${esc(co.biz_no)}</td><td class="lab" style="width:10mm">성명</td><td style="width:15mm"><span class="stamp-wrap">${esc(co.ceo)}${stampImg(co)}</span></td></tr>
+        <tr><td class="lab">주소</td><td colspan="3" style="font-size:9pt">${esc(co.address)}</td></tr>
+        <tr><td class="lab">연락처</td><td colspan="3">${esc(co.tel)}</td></tr>
+        <tr><td class="lab">EMAIL</td><td colspan="3">${esc(co.email)}</td></tr>
+      </table>
+    </div>
+    <div class="box" style="margin:3mm 0 0">
+      <div style="font-size:9.5pt;margin-bottom:1mm">&nbsp;다음과 같이 계산합니다.</div>
+      <div class="amount-line"><span>금&nbsp; 액 : ${korNum(t.total)}원 정</span><span>(₩${won(t.total)})</span></div>
+    </div>
+    <table class="items">
+      <tr><th style="width:11mm">순번</th><th>품목명</th><th style="width:15mm">규격</th><th style="width:13mm">수량</th><th style="width:25mm">단가</th><th style="width:29mm">공급가액</th><th style="width:25mm">부가세</th></tr>
+      ${body}
+    </table>
+    <table class="totals" style="margin-top:2mm">
+      <tr><td class="lab" style="width:20mm">공급가액</td><td class="num">${won(t.supply)}</td>
+        <td class="lab" style="width:12mm">VAT</td><td class="num">${won(t.tax)}</td>
+        <td class="lab" style="width:13mm">합계</td><td class="num">${won(t.total)}</td>
+        <td class="lab" style="width:13mm">확인</td><td class="num" style="width:30mm">인</td></tr>
+    </table>
+    <table style="margin-top:2mm">
+      <tr><td class="lab" style="width:20mm;height:15mm">비 고</td><td class="multiline">${esc(d.note)}</td></tr>
+    </table>
+    ${co.bank ? `<table style="margin-top:2mm"><tr><td class="lab" style="width:20mm;height:9mm">입금계좌</td><td style="font-weight:500">${esc(co.bank)}</td></tr></table>` : ''}
+  </div>`;
+}
+
+// ── 계약서 ──────────────────────────────────────────────────────────────
+function renderContract(doc, co){
+  const d = doc.data, c = d.client || {};
+  const amt = +doc.supply_amount || 0;
+  const vatLabel = d.vat_mode === 'included' ? '부가세포함' : '부가세별도';
+  return `<div class="sheet contract">
+    <table style="table-layout:fixed">
+      <colgroup><col style="width:13mm"><col style="width:30mm"><col><col style="width:27mm"><col style="width:37mm"></colgroup>
+      <tr><td colspan="3" rowspan="2" class="tt">공사도급표준계약서</td><td colspan="2" class="ctr">계약일자</td></tr>
+      <tr><td colspan="2" class="ctr">${ymd(doc.doc_date)}</td></tr>
+      <tr><td rowspan="4" class="ctr" style="font-weight:700;line-height:1.6">계<br>약<br>자</td>
+          <td class="ctr">발주처</td><td colspan="3">○ ${esc(doc.client_name)}</td></tr>
+      <tr><td rowspan="3" class="ctr">계약대상자</td><td>○ 상호 또는 법인 명칭 : ${esc(co.name)}</td><td colspan="2" style="white-space:nowrap;font-size:9.5pt">○ 사업자등록번호 : ${esc(co.biz_no)}</td></tr>
+      <tr><td>○ 주소 : ${esc(co.address)}</td><td colspan="2">○ 전화번호 : ${esc(co.tel)}</td></tr>
+      <tr><td>○ 대표자 : ${esc(co.ceo.split('').join(' '))}</td><td colspan="2"></td></tr>
+      <tr><td rowspan="8" class="ctr" style="font-weight:700;line-height:1.6">계<br>약<br>내<br>용</td>
+          <td class="ctr">공 사 명</td><td colspan="3">${esc(doc.title)}</td></tr>
+      <tr><td class="ctr">계 약 금</td><td colspan="3">일금 ${korNum(amt)} 원정 ( ₩${won(amt)}원/${vatLabel} )</td></tr>
+      <tr><td class="ctr">계약이행보증금</td><td colspan="3">${esc(d.perf_bond)}</td></tr>
+      <tr><td class="ctr">하자이행보증금</td><td colspan="3">${esc(d.defect_bond)}</td></tr>
+      <tr><td class="ctr">하자담보기간</td><td colspan="3">${esc(d.warranty)}</td></tr>
+      <tr><td class="ctr">지체상금율</td><td colspan="3">${esc(d.delay_rate)}</td></tr>
+      <tr><td class="ctr">착공년월일</td><td class="ctr">${ymd(d.start_date, true)}</td><td class="ctr">준공년월일</td><td class="ctr" style="white-space:nowrap">${ymd(d.end_date, true)}</td></tr>
+      <tr><td class="ctr">기타사항</td><td colspan="3" class="multiline">${esc(d.etc_note)}</td></tr>
+      <tr><td colspan="5" style="height:22mm;line-height:1.9;padding:2mm 3mm">
+        도급인("갑")과 수급인("을")은 상기와 같이 공사계약을 체결하고 신의에 성실히 계약상의 의무를 이행할 것을 확약하며, 이 계약의 증서로서 계약서를 작성하여 당사자 간 기명, 날인 후 각각 1통씩 보관한다.</td></tr>
+      <tr><td colspan="3">붙임서류 : ${esc(d.attachments)}</td><td colspan="2"></td></tr>
+      <tr><td colspan="5" style="text-align:right;height:12mm;padding-right:8mm">${ymd(doc.doc_date)}</td></tr>
+      <tr><td colspan="3" style="vertical-align:top;padding:4mm 3mm;height:52mm">
+          <table class="sign">
+            <tr><td>"갑"</td></tr>
+            <tr><td>${esc(doc.client_name)}</td></tr>
+            <tr><td>주&nbsp;&nbsp;&nbsp;&nbsp;소 : ${esc(c.address)}</td></tr>
+            <tr><td>대 표 자 : ${esc((c.ceo||'').split('').join(' '))} ( 인 )</td></tr>
+            <tr><td>전&nbsp;&nbsp;&nbsp;&nbsp;화 : ${esc(c.tel)}</td></tr>
+          </table></td>
+        <td colspan="2" style="vertical-align:top;padding:4mm 3mm">
+          <table class="sign">
+            <tr><td>"을"</td></tr>
+            <tr><td>주&nbsp;&nbsp;&nbsp;&nbsp;소 : ${esc(co.address)}</td></tr>
+            <tr><td>상&nbsp;&nbsp;&nbsp;&nbsp;호 : ${esc(co.name)}</td></tr>
+            <tr><td>대 표 자 : ${esc(co.ceo.split('').join(' '))} <span class="stamp-wrap">(인)${stampImg(co)}</span></td></tr>
+            <tr><td>전&nbsp;&nbsp;&nbsp;&nbsp;화 : ${esc(co.tel)}</td></tr>
+          </table></td></tr>
+    </table>
+  </div>`;
+}
+
+// ── 작업완료확인서 ──────────────────────────────────────────────────────
+function renderCompletion(doc, co){
+  const d = doc.data;
+  const amt = +doc.supply_amount || 0;
+  const vatLabel = d.vat_mode === 'included' ? '부가세포함' : '부가세별도';
+  let html = `<div class="sheet"><div class="frame"></div>
+    <div class="wc-title">작업완료확인서</div>
+    <table class="wc-table">
+      <tr><td>○ 공&nbsp;&nbsp; 사&nbsp; 명 :</td><td>${esc(doc.title)}</td></tr>
+      <tr><td>○ 계약금액 :</td><td>${amt ? `일 금 ${korNum(amt)} 원 정 (₩${won(amt)}), ${vatLabel}` : ''}</td></tr>
+      <tr><td>○ 계약일자 :</td><td>${ymdShort(d.contract_date)}</td></tr>
+      <tr><td>○ 착공일자 :</td><td>${ymdShort(d.start_date)}</td></tr>
+      <tr><td>○ 준공일자 :</td><td>${ymdShort(d.end_date)}</td></tr>
+    </table>
+    <div class="wc-attach">❖&nbsp;&nbsp;&nbsp; 별첨 : 사진자료</div>
+    <div class="wc-date">${dot(doc.doc_date).replace(/\//g,'.')}</div>
+    <div class="wc-sign">
+      주&nbsp; 소 : ${esc(co.address)}<br>
+      회사명 : ${esc(co.name)}<br>
+      성&nbsp; 명 : ${esc(co.ceo)} <span class="stamp-wrap">(인)${stampImg(co)}</span>
+    </div>
+  </div>`;
+
+  if((d.photo_layout || 'rows') === 'grid') return html + renderPhotoGrid(d.photos || []);
+
+  // 사진 페이지: 한 페이지에 3줄(줄마다 사진 3장)
+  const groups = (d.groups||[]).filter(g => (g.photos||[]).length);
+  for(let p=0; p<groups.length; p+=3){
+    html += `<div class="sheet"><div class="frame"></div><div class="ph-title">작업사진</div>`;
+    groups.slice(p, p+3).forEach(g => {
+      const cells = g.photos.slice(0,3);
+      while(cells.length < 3) cells.push(null);
+      html += `<div class="ph-row"><div class="ph-label">${vtext(g.title)}</div><div class="ph-cells">
+        ${cells.map(ph => ph ? `<div class="ph-cell"><img src="/api/photo/${ph.folder}/${ph.filename}"><div class="cap">${esc(ph.caption)}</div></div>` : '<div></div>').join('')}
+      </div></div>`;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+function docId(){ return new URLSearchParams(location.search).get('id'); }
+
+function downloadFile(fmt){
+  location.href = `/api/documents/${docId()}/export/${fmt}`;
+}
+
+function loadScript(src){
+  return new Promise((ok, fail) => {
+    if(document.querySelector(`script[src="${src}"]`)) return ok();
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = fail;
+    document.head.appendChild(s);
+  });
+}
+
+// 화면의 A4 페이지를 그대로 이미지로 떠서 PDF 파일로 저장
+async function downloadPdf(){
+  const btn = document.getElementById('btnPdf');
+  btn.disabled = true; btn.textContent = 'PDF 만드는 중...';
+  // 화면 축소(zoom)가 없는 곳에 페이지를 복사해 A4 실제 크기로 캡처
+  const stage = document.createElement('div');
+  stage.style.cssText = 'position:fixed;left:0;top:0;z-index:-1;background:#fff';
+  document.body.appendChild(stage);
+  try {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await document.fonts.ready;
+    const pdf = new jspdf.jsPDF({unit:'mm', format:'a4', compress:true});
+    const sheets = [...document.querySelectorAll('.sheet')];
+    for(let i = 0; i < sheets.length; i++){
+      const copy = sheets[i].cloneNode(true);
+      copy.style.margin = '0';
+      copy.style.boxShadow = 'none';
+      stage.replaceChildren(copy);
+      await Promise.all([...copy.querySelectorAll('img')].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+      const canvas = await html2canvas(copy, {scale:2.5, useCORS:true, backgroundColor:'#ffffff', logging:false,
+        x:0, y:0, scrollX:0, scrollY:0, windowWidth:copy.offsetWidth, windowHeight:copy.offsetHeight});
+      if(i) pdf.addPage();
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
+    }
+    pdf.save(document.title + '.pdf');
+  } catch(e) {
+    alert('PDF를 만들지 못했습니다. 인쇄 버튼에서 "PDF로 저장"을 이용해 주세요.');
+  } finally {
+    stage.remove();
+    btn.disabled = false; btn.textContent = '⬇ PDF';
+  }
+}
+
+// 작업사진: 사진만 격자로 (한 페이지 최대 12장, 사진 수에 따라 2·3·4열)
+function renderPhotoGrid(photos){
+  let html = '';
+  for(let p = 0; p < photos.length; p += 12){
+    const page = photos.slice(p, p + 12);
+    const cols = page.length <= 4 ? 2 : page.length <= 9 ? 3 : 4;
+    const rows = Math.ceil(page.length / cols);
+    const w = 178 / cols - 4, h = Math.min(w * 1.3, 240 / rows - 9);
+    html += `<div class="sheet"><div class="frame"></div><div class="ph-title">작업사진</div>
+      <div style="display:grid;grid-template-columns:repeat(${cols},${w}mm);gap:6mm 4mm;justify-content:center">
+      ${page.map(ph => `<img src="/api/photo/${ph.folder}/${ph.filename}" style="width:${w}mm;height:${h}mm;object-fit:cover;display:block;background:#eee">`).join('')}
+      </div></div>`;
+  }
+  return html;
+}
+
+function goBack(){
+  // 앱으로 돌아가 같은 문서 편집 화면을 연다
+  location.href = '/#doc=' + docId();
+}
+
+// 화면 폭에 맞춰 A4 미리보기 축소 (인쇄 시에는 원래 크기)
+function fitWidth(){
+  const pages = document.getElementById('pages');
+  const sheetPx = 210 * 96 / 25.4;
+  const z = Math.min(1, (window.innerWidth - 16) / sheetPx);
+  pages.style.zoom = z;
+}
+window.addEventListener('resize', fitWidth);
+window.addEventListener('beforeprint', () => document.getElementById('pages').style.zoom = 1);
+window.addEventListener('afterprint', fitWidth);
+
+async function init(){
+  const id = new URLSearchParams(location.search).get('id');
+  const el = document.getElementById('pages');
+  try {
+    const r = await fetch('/api/documents/' + id);
+    if(!r.ok) throw new Error();
+    const doc = await r.json();
+    const co = doc.company;
+    const render = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion}[doc.doc_type];
+    el.innerHTML = render(doc, co);
+    const name = `${TYPE_NAME[doc.doc_type]}_${doc.client_name||doc.site_name||''}_${(doc.doc_date||'').replace(/-/g,'')}`;
+    document.title = name;  // PDF 저장 시 파일명
+    document.getElementById('docName').textContent = name;
+    fitWidth();
+  } catch(e) {
+    el.innerHTML = '<div class="err">문서를 불러올 수 없습니다</div>';
+    document.getElementById('docName').textContent = '';
+  }
+}
+init();
+</script>
+</body>
+</html>

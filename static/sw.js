@@ -1,4 +1,4 @@
-const CACHE = 'wilo-v4';
+const CACHE = 'wilo-v5';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -35,11 +35,15 @@ self.addEventListener('fetch', e => {
       }).catch(() => caches.match(e.request))
     );
   } else {
+    // 화면 파일도 네트워크 우선 — 업데이트가 바로 반영되고, 오프라인일 때만 캐시 사용
     e.respondWith(
-      caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
-        caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+      fetch(e.request).then(res => {
+        if (e.request.method === 'GET' && res.ok && url.origin === location.origin) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
         return res;
-      }))
+      }).catch(() => caches.match(e.request).then(cached => cached || caches.match('/')))
     );
   }
 });

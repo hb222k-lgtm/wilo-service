@@ -1719,8 +1719,8 @@ const App = {
 
   defaultDocData(type, co) {
     const client = {};
-    if(type === 'quote') return {client, items:[blankItem()], valid_until:'', note: co.quote_note || ''};
-    if(type === 'statement') return {client, items:[blankItem()], note:''};
+    if(type === 'quote') return {client, items:[blankItem()], vat_mode:'excluded', bank:'', valid_until:'', note: co.quote_note || ''};
+    if(type === 'statement') return {client, items:[blankItem()], vat_mode:'excluded', bank: bankList(co)[0] || '', note:''};
     if(type === 'contract') return {client, vat_mode:'excluded', perf_bond:'생 략', defect_bond:'10%',
       warranty:'준공일로부터 6개월', delay_rate:'계약금액(VAT 포함) × (1/1000) × 총 지체일수',
       start_date:'', end_date:'', etc_note:'', attachments:'1. 견적서'};
@@ -1750,6 +1750,7 @@ const App = {
     }
     this.doc = JSON.parse(JSON.stringify(doc));
     this._docDirty = !doc.id;
+    await this.loadCompany();  // 입금계좌 목록
     if(!this.sites.length) this.sites = await API.get('/sites').catch(() => []);
     this.navigate('doc-edit');
     this.renderDocEditor();
@@ -1800,8 +1801,23 @@ const App = {
     </div>`;
 
     if(hasItems) {
+      const bank = docBank(d, this.company || {});
+      const banks = bankList(this.company || {});
+      if(bank && !banks.includes(bank)) banks.push(bank);
       html += `<div class="edit-section"><h3>품목</h3>${this.itemsHtml()}</div>
-        <div class="edit-section">${this._f('비고', 'data.note', {area:true})}</div>`;
+        <div class="edit-section"><h3>결제</h3>
+          <div class="form-group"><label>부가세</label>
+            <select data-k="data.vat_mode">
+              <option value="excluded" ${d.data.vat_mode !== 'none' ? 'selected' : ''}>부가세 별도 (10%)</option>
+              <option value="none" ${d.data.vat_mode === 'none' ? 'selected' : ''}>부가세 없음 (현금 등)</option>
+            </select></div>
+          <div class="form-group"><label>입금계좌 ${banks.length ? '' : '<span style="font-weight:400">— 문서 설정(⚙)에서 계좌를 등록하세요</span>'}</label>
+            <select data-k="data.bank">
+              <option value="" ${bank ? '' : 'selected'}>표시 안 함</option>
+              ${banks.map(b => `<option value="${esc(b)}" ${b === bank ? 'selected' : ''}>${esc(b)}</option>`).join('')}
+            </select></div>
+          ${this._f('비고', 'data.note', {area:true})}
+        </div>`;
     } else {
       html += `<div class="edit-section"><h3>계약 금액 · 기간</h3>
         <div class="form-row">
@@ -1810,6 +1826,7 @@ const App = {
             <select data-k="data.vat_mode">
               <option value="excluded" ${d.data.vat_mode !== 'included' ? 'selected' : ''}>부가세별도</option>
               <option value="included" ${d.data.vat_mode === 'included' ? 'selected' : ''}>부가세포함</option>
+              <option value="none" ${d.data.vat_mode === 'none' ? 'selected' : ''}>부가세 없음</option>
             </select></div>
         </div>
         <div class="totals-box" id="doc-totals"></div>
@@ -1927,10 +1944,10 @@ const App = {
   computeDocAmounts() {
     const d = this.doc;
     if(d.data.items) {
-      const t = sumItems(d.data.items);
+      const t = sumItems(d.data.items, d.data.vat_mode);
       d.supply_amount = t.supply; d.tax_amount = t.tax;
     } else {
-      d.tax_amount = d.data.vat_mode === 'included' ? 0 : Math.round((+d.supply_amount||0) * 0.1);
+      d.tax_amount = d.data.vat_mode === 'excluded' ? Math.round((+d.supply_amount||0) * 0.1) : 0;
     }
   },
 
@@ -1942,7 +1959,7 @@ const App = {
       d.data.items.forEach((it, i) => {
         const el = document.getElementById('item-amt-' + i);
         const a = Math.round((+it.qty||0) * (+it.price||0));
-        if(el) el.textContent = a ? `공급가액 ${won(a)} · 부가세 ${won(Math.round(a*0.1))}` : '';
+        if(el) el.textContent = a ? `공급가액 ${won(a)} · 부가세 ${won(itemTax(a, d.data.vat_mode))}` : '';
       });
       const total = d.supply_amount + d.tax_amount;
       box.innerHTML = `<div><span>공급가액</span><span>${won(d.supply_amount)}</span></div>
@@ -1952,7 +1969,7 @@ const App = {
     } else {
       const amt = +d.supply_amount || 0;
       box.innerHTML = amt
-        ? `<div style="font-weight:600">일금 ${korNum(amt)} 원정 (₩${won(amt)}, ${d.data.vat_mode === 'included' ? '부가세포함' : '부가세별도'})</div>`
+        ? `<div style="font-weight:600">일금 ${korNum(amt)} 원정 (₩${won(amt)}, ${vatLabel(d.data.vat_mode)})</div>`
         : `<div style="color:var(--sub)">금액을 입력하면 한글 금액이 표시됩니다</div>`;
     }
   },
@@ -2171,7 +2188,11 @@ const App = {
         ? JSON.parse(JSON.stringify(src.data.items))
         : [{name: src.title, spec:'식', qty:1, price: src.supply_amount}];
     }
-    if(src.data.vat_mode && data.vat_mode) data.vat_mode = src.data.vat_mode;
+    if(src.data.vat_mode && data.vat_mode) {
+      // 품목 문서(견적·명세)는 '별도'와 '없음'만 있음
+      data.vat_mode = data.items && src.data.vat_mode === 'included' ? 'excluded' : src.data.vat_mode;
+    }
+    if(data.items && 'bank' in src.data) data.bank = src.data.bank;
     ['start_date','end_date'].forEach(k => { if(src.data[k] && k in data) data[k] = src.data[k]; });
     if(toType === 'completion') data.contract_date = src.doc_type === 'contract' ? src.doc_date : (src.data.contract_date || '');
     await this.openDocEditor({id:null, doc_type:toType, site_id:src.site_id, title:src.title, client_name:src.client_name,
@@ -2210,7 +2231,8 @@ const App = {
         <div class="form-row">${f('전화','tel')}${f('팩스','fax')}</div>
         <div class="form-row">${f('휴대폰 (담당자)','mobile')}${f('이메일','email')}</div>
         <div class="form-row">${f('업태','biz_type')}${f('종목','biz_item')}</div>
-        ${f('입금계좌 (거래명세서 하단)','bank','예) 기업은행 917-036865-01-016 윌로펌프서비스(강한빛)')}
+        <div class="form-group"><label>입금계좌 — 한 줄에 하나씩 (첫 줄은 거래명세서 기본 계좌)</label>
+          <textarea id="co-bank" style="min-height:70px" placeholder="기업은행 917-036865-01-016 윌로펌프서비스(강한빛)&#10;기업은행 439-063779-02-011 강한빛">${esc(co.bank)}</textarea></div>
         <div class="form-group"><label>견적서 기본 비고</label><textarea id="co-quote_note" style="min-height:60px">${esc(co.quote_note)}</textarea></div>
         <button class="btn btn-primary" style="margin-bottom:14px" onclick="App.saveCompany()">회사 정보 저장</button>
       </div>

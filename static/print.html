@@ -114,13 +114,16 @@ function ymdShort(d){ if(!d) return ''; const [y,m,dd]=d.split('-'); return `${y
 
 // 세로 글씨: 한 글자씩 줄바꿈 (PDF 변환에서도 그대로 보이도록 writing-mode 대신 사용)
 function vtext(s){ return String(s||'').split('').map(c => c === ' ' ? '<span style="display:block;height:.6em"></span>' : esc(c) + '<br>').join(''); }
+function bankRow(bank){
+  return bank ? `<table style="margin-top:2mm"><tr><td class="lab" style="width:20mm;height:9mm">입금계좌</td><td style="font-weight:500">${esc(bank)}</td></tr></table>` : '';
+}
 function stampImg(co, cls='stamp'){ return co.has_stamp ? `<img class="${cls}" src="/api/stamp">` : ''; }
 function coContact(co){ return `TEL ${esc(co.tel)}${co.fax ? ' / FAX ' + esc(co.fax) : ''}`; }
 
 // ── 견적서 ──────────────────────────────────────────────────────────────
 function renderQuote(doc, co){
   const d = doc.data, c = d.client || {}, items = (d.items||[]).filter(it => it.name || it.price);
-  const t = sumItems(items);
+  const t = sumItems(items, d.vat_mode);
   const rows = Math.max(14, items.length);
   let body = '';
   for(let i=0;i<rows;i++){
@@ -128,7 +131,7 @@ function renderQuote(doc, co){
     if(!it){ body += `<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>`; continue; }
     const a = Math.round((+it.qty||0)*(+it.price||0));
     body += `<tr><td>${esc(it.name)}</td><td class="ctr">${esc(it.spec)}</td><td class="ctr">${esc(it.qty)}</td>
-      <td class="num">${won(it.price)}</td><td class="num">${won(a)}</td><td class="num">${won(Math.round(a*0.1))}</td></tr>`;
+      <td class="num">${won(it.price)}</td><td class="num">${won(a)}</td><td class="num">${d.vat_mode === 'none' ? '-' : won(itemTax(a, d.vat_mode))}</td></tr>`;
   }
   return `<div class="sheet">
     <div class="title">견적서</div>
@@ -167,13 +170,14 @@ function renderQuote(doc, co){
     <table style="margin-top:2mm">
       <tr><td class="lab" style="width:15mm;height:22mm">비고</td><td class="multiline" style="vertical-align:bottom;padding:2mm 3mm">${esc(d.note)}</td></tr>
     </table>
+    ${bankRow(docBank(doc, co))}
   </div>`;
 }
 
 // ── 거래명세서 ──────────────────────────────────────────────────────────
 function renderStatement(doc, co){
   const d = doc.data, c = d.client || {}, items = (d.items||[]).filter(it => it.name || it.price);
-  const t = sumItems(items);
+  const t = sumItems(items, d.vat_mode);
   const rows = Math.max(14, items.length);
   let body = '';
   for(let i=0;i<rows;i++){
@@ -181,7 +185,7 @@ function renderStatement(doc, co){
     if(!it){ body += `<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`; continue; }
     const a = Math.round((+it.qty||0)*(+it.price||0));
     body += `<tr><td class="ctr">${i+1}</td><td>${esc(it.name)}</td><td class="ctr">${esc(it.spec)}</td><td class="ctr">${esc(it.qty)}</td>
-      <td class="num">${won(it.price)}</td><td class="num">${won(a)}</td><td class="num">${won(Math.round(a*0.1))}</td></tr>`;
+      <td class="num">${won(it.price)}</td><td class="num">${won(a)}</td><td class="num">${d.vat_mode === 'none' ? '-' : won(itemTax(a, d.vat_mode))}</td></tr>`;
   }
   return `<div class="sheet">
     <div class="title" style="letter-spacing:.35em">거래명세서</div>
@@ -222,7 +226,7 @@ function renderStatement(doc, co){
     <table style="margin-top:2mm">
       <tr><td class="lab" style="width:20mm;height:15mm">비 고</td><td class="multiline">${esc(d.note)}</td></tr>
     </table>
-    ${co.bank ? `<table style="margin-top:2mm"><tr><td class="lab" style="width:20mm;height:9mm">입금계좌</td><td style="font-weight:500">${esc(co.bank)}</td></tr></table>` : ''}
+    ${bankRow(docBank(doc, co))}
   </div>`;
 }
 
@@ -230,7 +234,7 @@ function renderStatement(doc, co){
 function renderContract(doc, co){
   const d = doc.data, c = d.client || {};
   const amt = +doc.supply_amount || 0;
-  const vatLabel = d.vat_mode === 'included' ? '부가세포함' : '부가세별도';
+  const vat = vatLabel(d.vat_mode);
   return `<div class="sheet contract">
     <table style="table-layout:fixed">
       <colgroup><col style="width:13mm"><col style="width:30mm"><col><col style="width:27mm"><col style="width:37mm"></colgroup>
@@ -243,7 +247,7 @@ function renderContract(doc, co){
       <tr><td>○ 대표자 : ${esc(co.ceo.split('').join(' '))}</td><td colspan="2"></td></tr>
       <tr><td rowspan="8" class="ctr" style="font-weight:700;line-height:1.6">계<br>약<br>내<br>용</td>
           <td class="ctr">공 사 명</td><td colspan="3">${esc(doc.title)}</td></tr>
-      <tr><td class="ctr">계 약 금</td><td colspan="3">일금 ${korNum(amt)} 원정 ( ₩${won(amt)}원/${vatLabel} )</td></tr>
+      <tr><td class="ctr">계 약 금</td><td colspan="3">일금 ${korNum(amt)} 원정 ( ₩${won(amt)}원/${vat} )</td></tr>
       <tr><td class="ctr">계약이행보증금</td><td colspan="3">${esc(d.perf_bond)}</td></tr>
       <tr><td class="ctr">하자이행보증금</td><td colspan="3">${esc(d.defect_bond)}</td></tr>
       <tr><td class="ctr">하자담보기간</td><td colspan="3">${esc(d.warranty)}</td></tr>
@@ -278,12 +282,12 @@ function renderContract(doc, co){
 function renderCompletion(doc, co){
   const d = doc.data;
   const amt = +doc.supply_amount || 0;
-  const vatLabel = d.vat_mode === 'included' ? '부가세포함' : '부가세별도';
+  const vat = vatLabel(d.vat_mode);
   let html = `<div class="sheet"><div class="frame"></div>
     <div class="wc-title">작업완료확인서</div>
     <table class="wc-table">
       <tr><td>○ 공&nbsp;&nbsp; 사&nbsp; 명 :</td><td>${esc(doc.title)}</td></tr>
-      <tr><td>○ 계약금액 :</td><td>${amt ? `일 금 ${korNum(amt)} 원 정 (₩${won(amt)}), ${vatLabel}` : ''}</td></tr>
+      <tr><td>○ 계약금액 :</td><td>${amt ? `일 금 ${korNum(amt)} 원 정 (₩${won(amt)}), ${vat}` : ''}</td></tr>
       <tr><td>○ 계약일자 :</td><td>${ymdShort(d.contract_date)}</td></tr>
       <tr><td>○ 착공일자 :</td><td>${ymdShort(d.start_date)}</td></tr>
       <tr><td>○ 준공일자 :</td><td>${ymdShort(d.end_date)}</td></tr>

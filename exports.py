@@ -45,13 +45,31 @@ def kor_num(n):
     return out
 
 
-def sum_items(items):
+def item_tax(amount, vat_mode):
+    """부가세: 'excluded' 별도(10%) · 'included' 포함 · 'none' 없음(현금 등)"""
+    return 0 if vat_mode == 'none' else round(amount * 0.1)
+
+
+def vat_label(vat_mode):
+    return {'included': '부가세포함', 'none': '부가세 없음'}.get(vat_mode, '부가세별도')
+
+
+def sum_items(items, vat_mode=None):
     supply = tax = 0
     for it in items:
         a = round(float(it.get('qty') or 0) * float(it.get('price') or 0))
         supply += a
-        tax += round(a * 0.1)
+        tax += item_tax(a, vat_mode)
     return supply, tax
+
+
+def doc_bank(doc, co):
+    """문서에 고른 입금계좌 (명세서는 안 고르면 설정의 첫 번째 계좌)"""
+    d = doc['data']
+    if 'bank' in d:
+        return d['bank'] or ''
+    banks = [b.strip() for b in (co.get('bank') or '').split('\n') if b.strip()]
+    return banks[0] if doc['doc_type'] == 'statement' and banks else ''
 
 
 def ymd(d, blank=False):
@@ -99,7 +117,7 @@ def lab(text, **kw):
 def layout_quote(doc, co):
     d, c = doc['data'], doc['data'].get('client') or {}
     items = [it for it in d.get('items') or [] if it.get('name') or it.get('price')]
-    supply, tax = sum_items(items)
+    supply, tax = sum_items(items, d.get('vat_mode'))
     total = supply + tax
     tel = ('TEL ' + c['tel'] if c.get('tel') else '') + (' / FAX ' + c['fax'] if c.get('fax') else '')
     co_tel = f"TEL {co['tel']}" + (f" / FAX {co['fax']}" if co.get('fax') else '')
@@ -119,7 +137,7 @@ def layout_quote(doc, co):
             continue
         a = round(float(it.get('qty') or 0) * float(it.get('price') or 0))
         item_rows.append((7, [C(it.get('name')), C(it.get('spec'), align='CENTER'), C(it.get('qty'), align='CENTER'),
-                              C(num=it.get('price') or 0, align='RIGHT'), C(num=a, align='RIGHT'), C(num=round(a * 0.1), align='RIGHT')]))
+                              C(num=it.get('price') or 0, align='RIGHT'), C(num=a, align='RIGHT'), (C('-', align='RIGHT') if d.get('vat_mode') == 'none' else C(num=item_tax(a, d.get('vat_mode')), align='RIGHT'))]))
     return [
         P('견 적 서', size=22, bold=True, underline=True, align='CENTER'),
         ('s', 3),
@@ -136,13 +154,13 @@ def layout_quote(doc, co):
                                           lab('합계'), C(num=total, align='RIGHT')])]),
         ('s', 2),
         T([15, 165], [(22, [lab('비고'), C(d.get('note'), valign='BOTTOM')])]),
-    ]
+    ] + bank_block(doc, co)
 
 
 def layout_statement(doc, co):
     d, c = doc['data'], doc['data'].get('client') or {}
     items = [it for it in d.get('items') or [] if it.get('name') or it.get('price')]
-    supply, tax = sum_items(items)
+    supply, tax = sum_items(items, d.get('vat_mode'))
     total = supply + tax
     none = (0, 0, 0, 0)
     vlab = lambda s: C(vertical(s), rs=5, bg=GRAY, bold=True, align='CENTER', size=9.5)
@@ -161,7 +179,7 @@ def layout_statement(doc, co):
             continue
         a = round(float(it.get('qty') or 0) * float(it.get('price') or 0))
         item_rows.append((7, [C(i + 1, align='CENTER'), C(it.get('name')), C(it.get('spec'), align='CENTER'), C(it.get('qty'), align='CENTER'),
-                              C(num=it.get('price') or 0, align='RIGHT'), C(num=a, align='RIGHT'), C(num=round(a * 0.1), align='RIGHT')]))
+                              C(num=it.get('price') or 0, align='RIGHT'), C(num=a, align='RIGHT'), (C('-', align='RIGHT') if d.get('vat_mode') == 'none' else C(num=item_tax(a, d.get('vat_mode')), align='RIGHT'))]))
     blocks = [
         P('거 래 명 세 서', size=22, bold=True, underline=True, align='CENTER'),
         ('s', 3),
@@ -179,15 +197,18 @@ def layout_statement(doc, co):
         ('s', 2),
         T([20, 160], [(15, [lab('비 고'), C(d.get('note'))])]),
     ]
-    if co.get('bank'):
-        blocks += [('s', 2), T([20, 160], [(9, [lab('입금계좌'), C(co['bank'], bold=True)])])]
-    return blocks
+    return blocks + bank_block(doc, co)
+
+
+def bank_block(doc, co):
+    bank = doc_bank(doc, co)
+    return [('s', 2), T([20, 160], [(9, [lab('입금계좌'), C(bank, bold=True)])])] if bank else []
 
 
 def layout_contract(doc, co):
     d, c = doc['data'], doc['data'].get('client') or {}
     amt = int(doc.get('supply_amount') or 0)
-    vat = '부가세포함' if d.get('vat_mode') == 'included' else '부가세별도'
+    vat = vat_label(d.get('vat_mode'))
     ctr = lambda s, **kw: C(s, align='CENTER', **kw)
     # 서명란: 왼쪽 "갑"(3칸) · 오른쪽 "을"(3칸, 마지막 칸은 (인) 자리)
     L, R = (1, 1, 0, 0), (1, 1, 0, 0)
@@ -224,7 +245,7 @@ def layout_contract(doc, co):
 def layout_completion(doc, co):
     d = doc['data']
     amt = int(doc.get('supply_amount') or 0)
-    vat = '부가세포함' if d.get('vat_mode') == 'included' else '부가세별도'
+    vat = vat_label(d.get('vat_mode'))
     none = (0, 0, 0, 0)
     info = lambda k, v: (11, [C(k, bg=BLUE, b=none, size=11), C(v, bg=BLUE, b=none, size=11)])
     blocks = [

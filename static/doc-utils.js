@@ -25,9 +25,21 @@ function korNum(n){
   return out;
 }
 
-// 품목 합계: 공급가액, 세액(10%), 합계
-function sumItems(items){
+// 부가세: 'excluded' 별도(10% 더함) · 'included' 포함 · 'none' 없음(현금 등)
+function itemTax(amount, vatMode){ return vatMode === 'none' ? 0 : Math.round(amount * 0.1); }
+function vatLabel(vatMode){ return {included:'부가세포함', none:'부가세 없음'}[vatMode] || '부가세별도'; }
+
+// 품목 합계: 공급가액, 세액, 합계
+function sumItems(items, vatMode){
   let supply = 0, tax = 0;
-  (items||[]).forEach(it => { const a = Math.round((+it.qty||0)*(+it.price||0)); supply += a; tax += Math.round(a*0.1); });
+  (items||[]).forEach(it => { const a = Math.round((+it.qty||0)*(+it.price||0)); supply += a; tax += itemTax(a, vatMode); });
   return {supply, tax, total: supply + tax};
+}
+
+// 입금계좌: 설정에 한 줄에 하나씩 · 문서마다 고른 계좌 (명세서는 안 고르면 첫 번째 계좌)
+function bankList(co){ return String(co.bank || '').split('\n').map(s => s.trim()).filter(Boolean); }
+function docBank(doc, co){
+  const d = doc.data || {};
+  if('bank' in d) return d.bank || '';
+  return doc.doc_type === 'statement' ? (bankList(co)[0] || '') : '';
 }

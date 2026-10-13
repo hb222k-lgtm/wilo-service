@@ -1672,9 +1672,25 @@ const App = {
   docFilter: '',
   doc: null,
 
-  async loadCompany(force) {
-    if(!this.company || force) this.company = await API.get('/settings/company').catch(() => this.company || {});
-    return this.company;
+  // 발행처(공급자) 목록 — 첫 번째가 기본
+  async loadCompanies(force) {
+    if(!this.companies || force) this.companies = await API.get('/settings/companies').catch(() => this.companies || [{}]);
+    return this.companies;
+  },
+  issuerFor(doc) {
+    const list = this.companies || [{}];
+    return list.find(c => c.id === (doc.data || {}).issuer_id) || list[0];
+  },
+
+  // 발행처를 바꾸면 입금계좌 · 견적 비고 기본값도 그 발행처 것으로
+  setIssuer(id) {
+    const d = this.doc, before = this.issuerFor(d);
+    d.data.issuer_id = id;
+    const co = this.issuerFor(d);
+    if(d.data.items) d.data.bank = d.doc_type === 'statement' ? (bankList(co)[0] || '') : '';
+    if(d.doc_type === 'quote' && (d.data.note || '') === (before.quote_note || '')) d.data.note = co.quote_note || '';
+    this._docDirty = true;
+    this.renderDocEditor();
   },
 
   async renderDocs() {
@@ -1724,7 +1740,10 @@ const App = {
   showDocTypePicker() { this.openModal('modal-doctype'); },
 
   defaultDocData(type, co) {
-    const client = {};
+    const client = {}, issuer_id = co.id;
+    return {issuer_id, ...this._defaultDocData(type, co, client)};
+  },
+  _defaultDocData(type, co, client) {
     if(type === 'quote') return {client, items:[blankItem()], vat_mode:'excluded', bank:'', valid_until:'', note: co.quote_note || ''};
     if(type === 'statement') return {client, items:[blankItem()], vat_mode:'excluded', bank: bankList(co)[0] || '', note:''};
     if(type === 'contract') return {client, vat_mode:'excluded', perf_bond:'생 략', defect_bond:'10%',
@@ -1736,7 +1755,7 @@ const App = {
 
   async newDoc(type, siteId) {
     this.closeModal('modal-doctype');
-    const co = await this.loadCompany();
+    const co = (await this.loadCompanies())[0];
     await this.openDocEditor({id:null, doc_type:type, site_id:null, title:'', client_name:'', doc_date:TODAY,
       supply_amount:0, tax_amount:0, source_id:null, data:this.defaultDocData(type, co)});
     if(siteId) await this.docPickSite(siteId);
@@ -1756,7 +1775,7 @@ const App = {
     }
     this.doc = JSON.parse(JSON.stringify(doc));
     this._docDirty = !doc.id;
-    await this.loadCompany();  // 입금계좌 목록
+    await this.loadCompanies();  // 발행처 · 입금계좌 목록
     if(!this.sites.length) this.sites = await API.get('/sites').catch(() => []);
     this.navigate('doc-edit');
     this.renderDocEditor();
@@ -1788,6 +1807,10 @@ const App = {
 
     let html = `<div class="edit-section">
       <h3>기본 정보 ${d.doc_no ? `<span class="badge badge-blue">${esc(d.doc_no)}</span>` : ''}</h3>
+      ${(this.companies || []).length > 1 ? `<div class="form-group"><label>발행처 (공급자)</label>
+        <select onchange="App.setIssuer(this.value)">
+          ${this.companies.map(c => `<option value="${esc(c.id)}" ${c.id === this.issuerFor(d).id ? 'selected' : ''}>${esc(c.name)} (${esc(c.ceo)})</option>`).join('')}
+        </select></div>` : ''}
       <div class="form-group"><label>현장 (선택하면 거래처 정보 자동 입력)</label>
         <input type="text" id="doc-site-input" value="${esc(site ? site.name : '')}" placeholder="현장명 검색..."
           autocomplete="off" oninput="App.docSiteSearch(this)" onfocus="App.docSiteSearch(this)"></div>
@@ -1807,8 +1830,8 @@ const App = {
     </div>`;
 
     if(hasItems) {
-      const bank = docBank(d, this.company || {});
-      const banks = bankList(this.company || {});
+      const bank = docBank(d, this.issuerFor(d));
+      const banks = bankList(this.issuerFor(d));
       if(bank && !banks.includes(bank)) banks.push(bank);
       html += `<div class="edit-section"><h3>품목</h3>${this.itemsHtml()}</div>
         <div class="edit-section"><h3>결제</h3>
@@ -2186,7 +2209,8 @@ const App = {
   async convertDoc(toType) {
     if(this._docDirty) await this.saveDoc();
     if(this._docDirty) return;
-    const src = this.doc, co = await this.loadCompany();
+    await this.loadCompanies();
+    const src = this.doc, co = this.issuerFor(src);
     const data = this.defaultDocData(toType, co);
     data.client = {...src.data.client};
     if(data.items) {
@@ -2210,7 +2234,7 @@ const App = {
   async completionFromVisit(visitId) {
     const v = (this.currentVisits || []).find(x => x.id === visitId), site = this.currentSite;
     if(!v || !site) return;
-    const co = await this.loadCompany();
+    const co = (await this.loadCompanies())[0];
     const data = this.defaultDocData('completion', co);
     const title = (v.work_content || '').split('\n')[0].trim();
     const photos = this.currentPhotos.filter(p => p.visit_id === visitId).reverse();
@@ -2226,11 +2250,19 @@ const App = {
   async renderDocSettings() {
     const el = document.getElementById('doc-settings-content');
     el.innerHTML = `<div class="empty" style="padding:32px"><p>불러오는 중...</p></div>`;
-    const co = await this.loadCompany(true);
+    const companies = await this.loadCompanies(true);
+    const isNew = this._editCompanyId === 'new';
+    const co = isNew ? {id:'new', show_logo:false} : (companies.find(c => c.id === this._editCompanyId) || companies[0]);
+    this._editCompanyId = co.id;
     const prices = await fetch('/api/price-items?manual=1').then(r => r.json()).catch(() => ({items:[], total:0}));
     const f = (label, k, ph='') => `<div class="form-group"><label>${label}</label><input id="co-${k}" value="${esc(co[k])}" placeholder="${esc(ph)}"></div>`;
     el.innerHTML = `
-      <div class="edit-section"><h3>회사 정보 <span style="font-weight:400;font-size:12px;color:var(--sub)">모든 문서에 들어갑니다</span></h3>
+      <div class="edit-section"><h3>발행처 (공급자) <span style="font-weight:400;font-size:12px;color:var(--sub)">문서마다 고를 수 있습니다 · 첫 번째가 기본</span></h3>
+        <div class="chips" style="padding:0 0 14px;flex-wrap:wrap">
+          ${companies.map(c => `<button class="chip ${c.id === co.id ? 'active' : ''}" onclick="App.editCompany('${c.id}')">${esc(c.name)}</button>`).join('')}
+          <button class="chip ${isNew ? 'active' : ''}" onclick="App.editCompany('new')">+ 추가</button>
+        </div>
+        ${isNew ? `<div style="font-size:12px;color:var(--sub);margin:-4px 0 12px;line-height:1.5">본인이 운영하거나 문서 발행을 위임받은 사업자만 등록하세요.</div>` : ''}
         <div class="form-row">${f('상호','name')}${f('대표자','ceo')}</div>
         ${f('사업자번호','biz_no')}
         ${f('주소','address')}
@@ -2240,16 +2272,19 @@ const App = {
         <div class="form-group"><label>입금계좌 — 한 줄에 하나씩 (첫 줄은 거래명세서 기본 계좌)</label>
           <textarea id="co-bank" style="min-height:70px" placeholder="기업은행 917-036865-01-016 윌로펌프서비스(강한빛)&#10;기업은행 439-063779-02-011 강한빛">${esc(co.bank)}</textarea></div>
         <div class="form-group"><label>견적서 기본 비고</label><textarea id="co-quote_note" style="min-height:60px">${esc(co.quote_note)}</textarea></div>
-        <button class="btn btn-primary" style="margin-bottom:14px" onclick="App.saveCompany()">회사 정보 저장</button>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:14px;cursor:pointer">
+          <input type="checkbox" id="co-show_logo" ${co.show_logo ? 'checked' : ''} style="width:18px;height:18px"> 견적서·명세서에 윌로 서비스 파트너 로고 표시</label>
+        <button class="btn btn-primary" style="margin-bottom:10px" onclick="App.saveCompany()">${isNew ? '발행처 추가' : '저장'}</button>
+        ${!isNew && companies[0].id !== co.id ? `<button class="btn btn-outline" style="margin-bottom:14px;color:var(--danger)" onclick="App.deleteCompany('${co.id}')">이 발행처 삭제</button>` : ''}
       </div>
-      <div class="edit-section"><h3>직인 (도장)</h3>
+      ${isNew ? '' : `<div class="edit-section"><h3>직인 (도장) — ${esc(co.name)}</h3>
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
-          ${co.has_stamp ? `<img src="/api/stamp?t=${Date.now()}" style="width:64px;height:64px;object-fit:contain;border:1px solid var(--border);border-radius:8px">`
+          ${co.has_stamp ? `<img src="/api/stamp?c=${encodeURIComponent(co.id)}&t=${Date.now()}" style="width:64px;height:64px;object-fit:contain;border:1px solid var(--border);border-radius:8px">`
             : `<div style="width:64px;height:64px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px">없음</div>`}
           <div style="flex:1;font-size:13px;color:var(--sub)">배경이 투명한 PNG가 가장 깔끔합니다</div>
           <button class="btn btn-sm btn-outline" onclick="document.getElementById('stampInput').click()">${co.has_stamp ? '변경' : '등록'}</button>
         </div>
-      </div>
+      </div>`}
       <div class="edit-section"><h3>단가표 <span class="badge badge-blue">${prices.total}개</span></h3>
         <div style="font-size:13px;color:var(--sub);margin-bottom:10px;line-height:1.5">윌로 가격표 엑셀(.xlsx)을 불러오면 견적서·명세서에서 모델명으로 검색해 소비자가가 자동 입력됩니다. 다시 불러오면 이전 엑셀 단가표만 교체되고, 아래에 직접 추가한 품목은 유지됩니다.</div>
         <button class="btn btn-outline" style="margin-bottom:14px;padding:11px;font-size:15px" onclick="document.getElementById('priceFileInput').click()">📊 엑셀 단가표 불러오기</button>
@@ -2309,14 +2344,31 @@ const App = {
     this.renderDocSettings();
   },
 
+  editCompany(id) {
+    this._editCompanyId = id;
+    this.renderDocSettings();
+  },
+
   async saveCompany() {
-    const body = {};
+    const body = {show_logo: document.getElementById('co-show_logo').checked};
     ['name','ceo','biz_no','address','tel','fax','mobile','email','biz_type','biz_item','bank','quote_note']
       .forEach(k => body[k] = document.getElementById('co-' + k).value);
     try {
-      this.company = await API.put('/settings/company', body);
-      this.toast('회사 정보가 저장됐습니다');
+      const isNew = this._editCompanyId === 'new';
+      this.companies = await API.put('/settings/companies/' + this._editCompanyId, body);
+      if(isNew) this._editCompanyId = this.companies[this.companies.length - 1].id;
+      this.toast(isNew ? '발행처가 추가됐습니다' : '저장됐습니다');
+      this.renderDocSettings();
     } catch(e) { this.toast('저장 실패: ' + e.message, 'warn'); }
+  },
+
+  async deleteCompany(id) {
+    if(!confirm('이 발행처를 삭제할까요? (이미 만든 문서는 기본 발행처로 표시됩니다)')) return;
+    try {
+      this.companies = await API.del('/settings/companies/' + id);
+      this._editCompanyId = null;
+      this.renderDocSettings();
+    } catch(e) { this.toast('삭제 실패: ' + e.message, 'warn'); }
   },
 
   toast(msg, type='ok') {
@@ -2465,7 +2517,7 @@ document.getElementById('stampInput').addEventListener('change', async function(
   const fd = new FormData();
   fd.append('photo', file);  // 직인은 투명 배경 유지를 위해 원본 그대로
   try {
-    await API.upload('/settings/stamp', fd);
+    await API.upload('/settings/stamp?c=' + encodeURIComponent(App._editCompanyId || 'wilo'), fd);
     App.toast('직인이 등록됐습니다');
     App.renderDocSettings();
   } catch(e) { App.toast('직인 등록 실패', 'warn'); }

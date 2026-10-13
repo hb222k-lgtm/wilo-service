@@ -695,54 +695,103 @@ def health():
     return jsonify({'ok': True, 'heic': HEIC_OK, 'commit': os.environ.get('RAILWAY_GIT_COMMIT_SHA', '')[:7]})
 
 
-# ── Settings (회사 정보 / 직인) ──────────────────────────────────────────────
+# ── Settings (발행처 정보 / 직인) ─────────────────────────────────────────────
+# 발행처(공급자)는 여러 개 — 문서마다 고른다. 첫 번째가 기본.
 
-DEFAULT_COMPANY = {
-    'name': '윌로펌프서비스',
-    'biz_no': '780-29-01203',
-    'ceo': '강한빛',
-    'address': '경기도 양주시 부흥로 2061-8 1층 T3호',
-    'tel': '031-821-0613',
-    'fax': '031-821-0614',
-    'mobile': '010-4389-0613',
-    'email': 'wilopumpe@naver.com',
-    'biz_type': '도소매',
-    'biz_item': '그외기타기계장비외',
-    'bank': '',
-    'quote_note': '작업 중 타 부품의 이상 발생 시 추가 비용 발생할 수 있음.',
-}
+COMPANY_FIELDS = ['name', 'biz_no', 'ceo', 'address', 'tel', 'fax', 'mobile', 'email',
+                  'biz_type', 'biz_item', 'bank', 'quote_note']
+DEFAULT_COMPANIES = [
+    {'id': 'wilo', 'name': '윌로펌프서비스', 'biz_no': '780-29-01203', 'ceo': '강한빛',
+     'address': '경기도 양주시 부흥로 2061-8 1층 T3호', 'tel': '031-821-0613', 'fax': '031-821-0614',
+     'mobile': '010-4389-0613', 'email': 'wilopumpe@naver.com', 'biz_type': '도소매', 'biz_item': '그외기타기계장비외',
+     'bank': '', 'quote_note': '작업 중 타 부품의 이상 발생 시 추가 비용 발생할 수 있음.', 'show_logo': True},
+    {'id': 'masterpump', 'name': '마스터펌프', 'biz_no': '789-18-01562', 'ceo': '김지수',
+     'address': '경기도 고양시 일산동구 고봉로578번길 19-39 (성석동)', 'tel': '010-4389-0613', 'fax': '0504-068-0613',
+     'mobile': '010-4389-0613', 'email': 'masterpump@naver.com', 'biz_type': '도매 및 소매업',
+     'biz_item': '그 외 기타 기계 및 장비 도매업', 'bank': '',
+     'quote_note': '작업 중 타 부품의 이상 발생 시 추가 비용 발생할 수 있음.', 'show_logo': False},
+]
 ASSET_DIR = os.path.join(DATA_DIR, 'assets')
 os.makedirs(ASSET_DIR, exist_ok=True)
 
 
-def load_company(conn):
-    row = conn.execute("SELECT value FROM settings WHERE key='company'").fetchone()
-    company = dict(DEFAULT_COMPANY)
+def stamp_path(cid):
+    # 처음부터 쓰던 윌로펌프서비스 직인은 stamp.png 그대로
+    return os.path.join(ASSET_DIR, 'stamp.png' if cid == 'wilo' else f'stamp-{secure_filename(cid)}.png')
+
+
+def load_companies(conn):
+    row = conn.execute("SELECT value FROM settings WHERE key='companies'").fetchone()
     if row:
-        company.update(json.loads(row['value']))
-    company['has_stamp'] = os.path.exists(os.path.join(ASSET_DIR, 'stamp.png'))
-    return company
+        companies = json.loads(row['value'])
+    else:
+        companies = [dict(c) for c in DEFAULT_COMPANIES]
+        old = conn.execute("SELECT value FROM settings WHERE key='company'").fetchone()
+        if old:  # 예전 단일 회사 설정 → 첫 번째 발행처로
+            companies[0].update(json.loads(old['value']))
+    for c in companies:
+        c['has_stamp'] = os.path.exists(stamp_path(c['id']))
+    return companies
 
 
-@app.route('/api/settings/company', methods=['GET'])
-def get_company():
-    conn = get_db()
-    company = load_company(conn)
-    conn.close()
-    return jsonify(company)
-
-
-@app.route('/api/settings/company', methods=['PUT'])
-def update_company():
-    d = request.json or {}
-    company = {k: (d.get(k) or '').strip() for k in DEFAULT_COMPANY}
-    conn = get_db()
-    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('company',?)",
-                 (json.dumps(company, ensure_ascii=False),))
+def save_companies(conn, companies):
+    clean = [{k: v for k, v in c.items() if k != 'has_stamp'} for c in companies]
+    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('companies',?)",
+                 (json.dumps(clean, ensure_ascii=False),))
     conn.commit()
-    company = load_company(conn)
+
+
+def company_for(conn, doc_data):
+    companies = load_companies(conn)
+    cid = (doc_data or {}).get('issuer_id')
+    return next((c for c in companies if c['id'] == cid), companies[0])
+
+
+@app.route('/api/settings/companies', methods=['GET'])
+def get_companies():
+    conn = get_db()
+    companies = load_companies(conn)
     conn.close()
-    return jsonify(company)
+    return jsonify(companies)
+
+
+@app.route('/api/settings/companies/<cid>', methods=['PUT'])
+def save_company(cid):
+    d = request.json or {}
+    if not (d.get('name') or '').strip():
+        return jsonify({'error': '상호를 입력하세요'}), 400
+    item = {k: (d.get(k) or '').strip() for k in COMPANY_FIELDS}
+    item['show_logo'] = bool(d.get('show_logo'))
+    conn = get_db()
+    companies = load_companies(conn)
+    if cid == 'new':
+        item['id'] = uuid.uuid4().hex[:8]
+        companies.append(item)
+    else:
+        found = next((c for c in companies if c['id'] == cid), None)
+        if not found:
+            conn.close()
+            return jsonify({'error': 'Not found'}), 404
+        found.update(item)
+    save_companies(conn, companies)
+    companies = load_companies(conn)
+    conn.close()
+    return jsonify(companies)
+
+
+@app.route('/api/settings/companies/<cid>', methods=['DELETE'])
+def delete_company(cid):
+    conn = get_db()
+    companies = load_companies(conn)
+    if len(companies) <= 1 or companies[0]['id'] == cid:
+        conn.close()
+        return jsonify({'error': '기본 발행처는 삭제할 수 없습니다'}), 400
+    save_companies(conn, [c for c in companies if c['id'] != cid])
+    companies = load_companies(conn)
+    conn.close()
+    if os.path.exists(stamp_path(cid)):
+        os.remove(stamp_path(cid))
+    return jsonify(companies)
 
 
 @app.route('/api/settings/stamp', methods=['POST'])
@@ -753,7 +802,7 @@ def upload_stamp():
         img = Image.open(request.files['photo'].stream)
         img = ImageOps.exif_transpose(img).convert('RGBA')
         img.thumbnail((400, 400), Image.LANCZOS)
-        img.save(os.path.join(ASSET_DIR, 'stamp.png'), 'PNG')
+        img.save(stamp_path(request.args.get('c') or 'wilo'), 'PNG')
     except Exception:
         return jsonify({'error': '이미지를 읽을 수 없습니다'}), 400
     return jsonify({'ok': True})
@@ -761,7 +810,8 @@ def upload_stamp():
 
 @app.route('/api/stamp')
 def serve_stamp():
-    resp = send_from_directory(ASSET_DIR, 'stamp.png')
+    path = stamp_path(request.args.get('c') or 'wilo')
+    resp = send_from_directory(ASSET_DIR, os.path.basename(path))
     resp.headers['Cache-Control'] = 'no-cache'
     return resp
 
@@ -840,7 +890,7 @@ def get_document(did):
     conn = get_db()
     row = conn.execute('''SELECT d.*, s.name site_name FROM documents d
                           LEFT JOIN sites s ON d.site_id=s.id WHERE d.id=?''', (did,)).fetchone()
-    company = load_company(conn)
+    company = company_for(conn, json.loads(row['data'] or '{}')) if row else None
     conn.close()
     if not row:
         return jsonify({'error': 'Not found'}), 404
@@ -882,13 +932,14 @@ def export_document(did, fmt):
         return jsonify({'error': '지원하지 않는 형식입니다'}), 400
     conn = get_db()
     row = conn.execute('SELECT * FROM documents WHERE id=?', (did,)).fetchone()
-    company = load_company(conn)
-    conn.close()
     if not row:
+        conn.close()
         return jsonify({'error': 'Not found'}), 404
     doc = doc_row(row)
-    images = exports.Images(PHOTO_DIR, os.path.join(ASSET_DIR, 'stamp.png'),
-                            os.path.join(app.static_folder, 'wilo-partner-logo.png'))
+    company = company_for(conn, doc['data'])
+    conn.close()
+    logo = os.path.join(app.static_folder, 'wilo-partner-logo.png') if company.get('show_logo') else None
+    images = exports.Images(PHOTO_DIR, stamp_path(company['id']), logo)
     blocks = exports.build_blocks(doc, company)
     name = exports.TYPE_NAME[doc['doc_type']]
     if fmt == 'xlsx':

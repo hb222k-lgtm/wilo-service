@@ -117,7 +117,8 @@ function vtext(s){ return String(s||'').split('').map(c => c === ' ' ? '<span st
 function bankRow(bank){
   return bank ? `<table style="margin-top:2mm"><tr><td class="lab" style="width:20mm;height:9mm">입금계좌</td><td style="font-weight:500">${esc(bank)}</td></tr></table>` : '';
 }
-function stampImg(co, cls='stamp'){ return co.has_stamp ? `<img class="${cls}" src="/api/stamp">` : ''; }
+function stampImg(co, cls='stamp'){ return co.has_stamp ? `<img class="${cls}" src="/api/stamp?c=${encodeURIComponent(co.id)}">` : ''; }
+function logoImg(co){ return co.show_logo ? '<img class="logo" src="/wilo-partner-logo.png">' : ''; }
 function coContact(co){ return `TEL ${esc(co.tel)}${co.fax ? ' / FAX ' + esc(co.fax) : ''}`; }
 
 // ── 견적서 ──────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ function renderQuote(doc, co){
     <div class="title">견적서</div>
     <div class="head-grid" style="margin-bottom:1mm">
       <div>일 자 : ${dot(doc.doc_date)}</div>
-      <div style="text-align:right"><img class="logo" src="/wilo-partner-logo.png"></div>
+      <div style="text-align:right">${logoImg(co)}</div>
     </div>
     <div class="head-grid" style="align-items:stretch">
       <table>
@@ -191,7 +192,7 @@ function renderStatement(doc, co){
     <div class="title" style="letter-spacing:.35em">거래명세서</div>
     <div class="head-grid" style="margin-bottom:0">
       <table style="width:70mm"><tr><td class="lab" style="width:20mm">일 자</td><td>${dot(doc.doc_date)}</td></tr></table>
-      <div style="text-align:right"><img class="logo" src="/wilo-partner-logo.png"></div>
+      <div style="text-align:right">${logoImg(co)}</div>
     </div>
     <div class="head-grid" style="align-items:stretch;gap:4mm">
       <table style="border-top:none">

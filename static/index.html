@@ -261,6 +261,16 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 .inp{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:15px;
   outline:none;font-family:inherit;background:#fff;color:var(--text)}
 .inp:focus{border-color:var(--primary)}
+.theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.theme-card{border:2px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;background:#fff}
+.theme-card.sel{border-color:var(--primary);box-shadow:0 0 0 2px #cfe2ff}
+.tc-mini{padding:0 10px 8px;background:#fff}
+.tc-title{font-size:13px;font-weight:700;letter-spacing:.2em;margin:6px 0 6px;padding-bottom:2px}
+.tc-row{display:flex;margin-bottom:3px;font-size:10px}
+.tc-row span:first-child{width:34px;text-align:center;font-weight:700;padding:2px 0}
+.tc-row span:last-child{flex:1;border:1px solid}
+.tc-foot{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-top:1px solid var(--border);font-size:13px}
+.tc-foot a{color:var(--primary);font-weight:600}
 .btn-row{display:flex;gap:8px;margin:10px 16px}
 .btn-row .btn{flex:1;font-size:15px;padding:12px 8px}
 details.client summary{cursor:pointer;font-size:14px;font-weight:700;padding-bottom:12px;list-style:none}
@@ -581,6 +591,13 @@ const DOC_TYPES = {
   completion: {name:'작업완료확인서', short:'완료서', icon:'✅', client:'발주처',          date:'확인일자'},
 };
 const PHOTO_CAPTIONS = ['작업전', '작업중', '작업 완료'];
+// 문서 디자인 시안 (설정 화면 미리보기용 — 실제 양식은 print.html · exports.py)
+const DOC_THEMES = [
+  {id:'classic', name:'기본',       labBg:'#efefef', labFg:'#000', line:'#777',    accent:'#000',    bar:'transparent', align:'center', deco:'underline', titleBorder:'none', font:'inherit'},
+  {id:'blue',    name:'블루',       labBg:'#e3edf9', labFg:'#0b3f7a', line:'#8fa9c9', accent:'#0b4f9c', bar:'#0b4f9c', align:'center', deco:'none', titleBorder:'none', font:'inherit'},
+  {id:'modern',  name:'모던',       labBg:'#2f3640', labFg:'#fff', line:'#9aa0a6', accent:'#2f3640', bar:'transparent', align:'left', deco:'none', titleBorder:'2px solid #2f3640', font:'inherit'},
+  {id:'serif',   name:'클래식 명조', labBg:'#e8f1ec', labFg:'#1f4d3a', line:'#8aa898', accent:'#1f4d3a', bar:'transparent', align:'center', deco:'none', titleBorder:'3px double #1f4d3a', font:'serif'},
+];
 const CLIENT_FIELDS = [['biz_no','사업자번호'],['ceo','대표자'],['address','주소'],['tel','연락처'],['fax','팩스']];
 const blankItem = () => ({name:'', spec:'ea', qty:1, price:0});
 
@@ -2272,6 +2289,10 @@ const App = {
         <div class="form-group"><label>입금계좌 — 한 줄에 하나씩 (첫 줄은 거래명세서 기본 계좌)</label>
           <textarea id="co-bank" style="min-height:70px" placeholder="기업은행 917-036865-01-016 윌로펌프서비스(강한빛)&#10;기업은행 439-063779-02-011 강한빛">${esc(co.bank)}</textarea></div>
         <div class="form-group"><label>견적서 기본 비고</label><textarea id="co-quote_note" style="min-height:60px">${esc(co.quote_note)}</textarea></div>
+        <div class="form-group"><label>문서 디자인 — 견적서 · 명세서 · 계약서 · 완료서에 모두 적용</label>
+          <input type="hidden" id="co-theme" value="${esc(co.theme || 'classic')}">
+          <div class="theme-grid">${DOC_THEMES.map(t => this.themeCardHtml(t, co)).join('')}</div>
+        </div>
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:14px;cursor:pointer">
           <input type="checkbox" id="co-show_logo" ${co.show_logo ? 'checked' : ''} style="width:18px;height:18px"> 견적서·명세서에 윌로 서비스 파트너 로고 표시</label>
         <button class="btn btn-primary" style="margin-bottom:10px" onclick="App.saveCompany()">${isNew ? '발행처 추가' : '저장'}</button>
@@ -2343,6 +2364,30 @@ const App = {
     this.renderDocSettings();
   },
 
+  themeCardHtml(t, co) {
+    const sel = (co.theme || 'classic') === t.id;
+    return `<div class="theme-card ${sel ? 'sel' : ''}" data-theme="${t.id}" onclick="App.pickTheme('${t.id}')">
+      <div class="tc-mini" style="font-family:${t.font}">
+        <div style="height:5px;background:${t.bar}"></div>
+        <div class="tc-title" style="color:${t.accent};text-align:${t.align};text-decoration:${t.deco};border-bottom:${t.titleBorder}">견 적 서</div>
+        <div class="tc-row"><span style="background:${t.labBg};color:${t.labFg}">상호</span><span style="border-color:${t.line}"></span></div>
+        <div class="tc-row"><span style="background:${t.labBg};color:${t.labFg}">금액</span><span style="border-color:${t.line}"></span></div>
+      </div>
+      <div class="tc-foot"><b>${t.name}</b>
+        <a onclick="event.stopPropagation();App.previewTheme('${t.id}')">미리보기</a></div>
+    </div>`;
+  },
+
+  pickTheme(id) {
+    document.getElementById('co-theme').value = id;
+    document.querySelectorAll('.theme-card').forEach(el => el.classList.toggle('sel', el.dataset.theme === id));
+  },
+
+  previewTheme(id) {
+    try { sessionStorage.setItem('wilo_editCompany', this._editCompanyId || ''); } catch(e) {}
+    location.href = `/print.html?preview=quote&c=${encodeURIComponent(this._editCompanyId || '')}&theme=${id}`;
+  },
+
   editCompany(id) {
     this._editCompanyId = id;
     this._pendingStamp = this._pendingStampUrl = null;
@@ -2364,7 +2409,7 @@ const App = {
 
   async saveCompany() {
     const body = {show_logo: document.getElementById('co-show_logo').checked};
-    ['name','ceo','biz_no','address','tel','fax','mobile','email','biz_type','biz_item','bank','quote_note']
+    ['name','ceo','biz_no','address','tel','fax','mobile','email','biz_type','biz_item','bank','quote_note','theme']
       .forEach(k => body[k] = document.getElementById('co-' + k).value);
     try {
       const isNew = this._editCompanyId === 'new';
@@ -2582,7 +2627,11 @@ window.addEventListener('offline', () => App.setOffline(true));
 // ── Init ──────────────────────────────────────────────────────────────────
 App.renderHome();
 // 인쇄 화면에서 돌아오면 그 문서를 다시 연다 (/#doc=<id>)
-if(location.hash.startsWith('#doc=')) {
+if(location.hash === '#settings') {
+  history.replaceState(null, '', '/');
+  try { App._editCompanyId = sessionStorage.getItem('wilo_editCompany') || null; } catch(e) {}
+  App.navigate('doc-settings');
+} else if(location.hash.startsWith('#doc=')) {
   const docId = location.hash.slice(5);
   history.replaceState(null, '', '/');
   App.openDoc(docId);

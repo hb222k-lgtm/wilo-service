@@ -139,7 +139,7 @@ def layout_quote(doc, co):
         item_rows.append((7, [C(it.get('name')), C(it.get('spec'), align='CENTER'), C(it.get('qty'), align='CENTER'),
                               C(num=it.get('price') or 0, align='RIGHT'), C(num=a, align='RIGHT'), (C('-', align='RIGHT') if d.get('vat_mode') == 'none' else C(num=item_tax(a, d.get('vat_mode')), align='RIGHT'))]))
     return [
-        P('견 적 서', size=22, bold=True, underline=True, align='CENTER'),
+        P('견 적 서', size=22, bold=True, underline=True, align='CENTER', title=True),
         ('s', 3),
         T([90, 90], [(8, [C(f"일 자 : {(doc['doc_date'] or '').replace('-', '/')}", valign='BOTTOM'),
                           C(img=('logo', 25, 7), align='RIGHT', valign='BOTTOM')])], border=False),
@@ -181,7 +181,7 @@ def layout_statement(doc, co):
         item_rows.append((7, [C(i + 1, align='CENTER'), C(it.get('name')), C(it.get('spec'), align='CENTER'), C(it.get('qty'), align='CENTER'),
                               C(num=it.get('price') or 0, align='RIGHT'), C(num=a, align='RIGHT'), (C('-', align='RIGHT') if d.get('vat_mode') == 'none' else C(num=item_tax(a, d.get('vat_mode')), align='RIGHT'))]))
     blocks = [
-        P('거 래 명 세 서', size=22, bold=True, underline=True, align='CENTER'),
+        P('거 래 명 세 서', size=22, bold=True, underline=True, align='CENTER', title=True),
         ('s', 3),
         T([20, 50, 110], [(7.5, [lab('일 자'), C((doc['doc_date'] or '').replace('-', '/')),
                                  C(img=('logo', 25, 7), align='RIGHT', valign='BOTTOM', b=none)])]),
@@ -220,7 +220,7 @@ def layout_contract(doc, co):
             (8.5, [C(f'전    화 : {c.get("tel", "")}', cs=3, b=L), C(f'전    화 : {co["tel"]}', cs=3, b=R)]),
             (5, [C(cs=3, b=(1, 1, 0, 1)), C(cs=3, b=(1, 1, 0, 1))])]
     rows = [
-        (9.5, [C('공사도급표준계약서', cs=3, rs=2, size=17, bold=True, align='CENTER'), ctr('계약일자', cs=3)]),
+        (9.5, [C('공사도급표준계약서', cs=3, rs=2, size=17, bold=True, align='CENTER', title=True), ctr('계약일자', cs=3)]),
         (9.5, [ctr(ymd(doc['doc_date']), cs=3)]),
         (9.5, [ctr('계\n약\n자', rs=4, bold=True), ctr('발주처'), C(f"○ {doc['client_name']}", cs=4)]),
         (9.5, [ctr('계약대상자', rs=3), C(f"○ 상호 또는 법인 명칭 : {co['name']}"), C(f"○ 사업자등록번호 : {co['biz_no']}", cs=3, size=9.5)]),
@@ -250,7 +250,7 @@ def layout_completion(doc, co):
     info = lambda k, v: (11, [C(k, bg=BLUE, b=none, size=11), C(v, bg=BLUE, b=none, size=11)])
     blocks = [
         ('s', 22),
-        P('작업완료확인서', size=22, align='CENTER'),
+        P('작업완료확인서', size=22, align='CENTER', title=True),
         ('s', 10),
         T([30, 150], [info('○ 공   사  명 :', doc.get('title')),
                       info('○ 계약금액 :', f'일 금 {kor_num(amt)} 원 정 (₩{won(amt)}), {vat}' if amt else ''),
@@ -309,11 +309,49 @@ def completion_grid(photos):
     return blocks
 
 
+# 문서 디자인 시안 — print.html의 .theme-* 와 같은 색 · 글꼴
+THEMES = {
+    'classic': {'lab_bg': '#EFEFEF', 'lab_fg': '#000000', 'line': '#777777', 'accent': '#000000', 'soft': '#DFE5EE',
+                'underline': True, 'title_align': 'CENTER', 'font_xlsx': '맑은 고딕', 'font_hwpx': '함초롬돋움'},
+    'blue':    {'lab_bg': '#E3EDF9', 'lab_fg': '#0B3F7A', 'line': '#8FA9C9', 'accent': '#0B4F9C', 'soft': '#E3EDF9',
+                'underline': False, 'title_align': 'CENTER', 'font_xlsx': '맑은 고딕', 'font_hwpx': '함초롬돋움'},
+    'modern':  {'lab_bg': '#2F3640', 'lab_fg': '#FFFFFF', 'line': '#9AA0A6', 'accent': '#2F3640', 'soft': '#EEF0F2',
+                'underline': False, 'title_align': 'LEFT', 'font_xlsx': '맑은 고딕', 'font_hwpx': '함초롬돋움'},
+    'serif':   {'lab_bg': '#E8F1EC', 'lab_fg': '#1F4D3A', 'line': '#8AA898', 'accent': '#1F4D3A', 'soft': '#E8F1EC',
+                'underline': False, 'title_align': 'CENTER', 'font_xlsx': '바탕', 'font_hwpx': '함초롬바탕'},
+}
+
+
+def theme_of(company):
+    return THEMES.get((company or {}).get('theme'), THEMES['classic'])
+
+
+def apply_theme(blocks, th):
+    """레이아웃의 기본 색(회색 머리칸 · 파란 바탕 · 제목)을 시안 색으로 바꾼다"""
+    for kind, *rest in blocks:
+        if kind == 'p':
+            p = rest[0]
+            if p.get('title'):
+                p.update(color=th['accent'], underline=th['underline'], align=th['title_align'])
+            elif p.get('text') == '작업사진':
+                p['color'] = th['accent']
+        elif kind == 't':
+            for _, cells in rest[0]['rows']:
+                for cell in cells:
+                    if cell.get('bg') == GRAY:
+                        cell.update(bg=th['lab_bg'], color=th['lab_fg'])
+                    elif cell.get('bg') == BLUE:
+                        cell['bg'] = th['soft']
+                    if cell.get('title'):
+                        cell['color'] = th['accent']
+    return blocks
+
+
 LAYOUTS = {'quote': layout_quote, 'statement': layout_statement, 'contract': layout_contract, 'completion': layout_completion}
 
 
 def build_blocks(doc, co):
-    return LAYOUTS[doc['doc_type']](doc, co)
+    return apply_theme(LAYOUTS[doc['doc_type']](doc, co), theme_of(co))
 
 
 # ── 이미지 ───────────────────────────────────────────────────────────────────
@@ -390,7 +428,7 @@ def cell_text(cell):
 
 # ── 엑셀 ─────────────────────────────────────────────────────────────────────
 
-def render_xlsx(blocks, images, title):
+def render_xlsx(blocks, images, title, theme=None):
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     from openpyxl.drawing.image import Image as XLImage
@@ -401,7 +439,9 @@ def render_xlsx(blocks, images, title):
 
     PX = 96 / 25.4   # px per mm
     EMU = 9525       # EMU per px
-    FONT = '맑은 고딕'
+    th = theme or THEMES['classic']
+    FONT = th['font_xlsx']
+    hexc = lambda c: (c or '#000000').lstrip('#')
 
     # 모든 표의 열 경계를 합쳐 시트 전체의 열 격자를 만든다
     edges = {0.0, float(PAGE_W)}
@@ -422,7 +462,7 @@ def render_xlsx(blocks, images, title):
         px = (edges[i + 1] - edges[i]) * PX
         ws.column_dimensions[get_column_letter(i + 1)].width = max(0.1, (px - 5) / 7)
 
-    thin = Side(style='thin', color='777777')
+    thin = Side(style='thin', color=hexc(th['line']))
     row = 1
     last_col = len(edges) - 1
 
@@ -452,7 +492,7 @@ def render_xlsx(blocks, images, title):
             p = rest[0]
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
             cell = ws.cell(row=row, column=1, value=p['text'])
-            cell.font = Font(name=FONT, size=p.get('size', 10), bold=p.get('bold', False),
+            cell.font = Font(name=FONT, size=p.get('size', 10), bold=p.get('bold', False), color=hexc(p.get('color')),
                              underline='single' if p.get('underline') else None)
             cell.alignment = Alignment(horizontal=p.get('align', 'LEFT').lower(), vertical='center')
             ws.row_dimensions[row].height = p.get('size', 10) * 1.8
@@ -478,7 +518,7 @@ def render_xlsx(blocks, images, title):
                 elif cell.get('text'):
                     v = cell['text']
                     xc.value = int(v) if isinstance(v, str) and v.isdigit() and len(v) < 6 else v
-                xc.font = Font(name=FONT, size=cell.get('size', 10), bold=cell.get('bold', False))
+                xc.font = Font(name=FONT, size=cell.get('size', 10), bold=cell.get('bold', False), color=hexc(cell.get('color')))
                 xc.alignment = Alignment(horizontal=cell.get('align', 'LEFT').lower(),
                                          vertical={'TOP': 'top', 'BOTTOM': 'bottom'}.get(cell.get('valign'), 'center'),
                                          wrap_text=True, indent=0 if cell.get('align') in ('CENTER', 'RIGHT') else 1)
@@ -544,9 +584,10 @@ def hu(mm):
 
 
 class Hwpx:
-    def __init__(self, images, page_border=False):
+    def __init__(self, images, page_border=False, theme=None):
         self.images = images
-        self.char_prs = {}    # (size, bold, underline) → id
+        self.theme = theme or THEMES['classic']
+        self.char_prs = {}    # (size, bold, underline, color) → id
         self.para_prs = {}    # (align, line%) → id
         self.border_fills = {}  # (l, r, t, b, bg, line) → id  (1·2번은 기본값)
         self.bin_items = {}   # img key → (item id, bytes, ext, px_w, px_h)
@@ -559,8 +600,8 @@ class Hwpx:
         self.uid += 1
         return self.uid
 
-    def cpr(self, size=10, bold=False, underline=False):
-        key = (float(size), bool(bold), bool(underline))
+    def cpr(self, size=10, bold=False, underline=False, color='#000000'):
+        key = (float(size), bool(bold), bool(underline), color or '#000000')
         return self.char_prs.setdefault(key, len(self.char_prs))
 
     def ppr(self, align='LEFT', line=130):
@@ -605,10 +646,10 @@ class Hwpx:
                 f'<hp:sz width="{W}" widthRelTo="ABSOLUTE" height="{H}" heightRelTo="ABSOLUTE" protect="0"/>{pos}'
                 f'<hp:outMargin left="0" right="0" top="0" bottom="0"/></hp:pic>')
 
-    def para(self, text, size=10, bold=False, underline=False, align='LEFT', line=130, extra='', page_break=False):
+    def para(self, text, size=10, bold=False, underline=False, align='LEFT', line=130, extra='', page_break=False, color='#000000'):
         run = f'<hp:t>{escape(text)}</hp:t>' if text else ''
         return (f'<hp:p id="2147483648" paraPrIDRef="{self.ppr(align, line)}" styleIDRef="0" pageBreak="{1 if page_break else 0}" '
-                f'columnBreak="0" merged="0"><hp:run charPrIDRef="{self.cpr(size, bold, underline)}">{run}{extra}</hp:run></hp:p>')
+                f'columnBreak="0" merged="0"><hp:run charPrIDRef="{self.cpr(size, bold, underline, color)}">{run}{extra}</hp:run></hp:p>')
 
     def table(self, t, page_break=False):
         widths, rows = t['widths'], t['rows']
@@ -628,7 +669,7 @@ class Hwpx:
             paras = []
             for i, ln in enumerate(lines):
                 extra = self.pic(('stamp',), STAMP, STAMP, inline=False) if cell.get('stamp') and i == 0 else ''
-                paras.append(self.para(ln, size, bold, False, align, line, extra))
+                paras.append(self.para(ln, size, bold, False, align, line, extra, color=cell.get('color')))
             if cell.get('img'):
                 key = cell['img']
                 paras = [self.para('', size, False, False, align, 100, self.pic(key, key[-2], key[-1]))]
@@ -665,7 +706,7 @@ class Hwpx:
             elif kind == 'p':
                 p = rest[0]
                 out.append(self.para(p['text'], p.get('size', 10), p.get('bold', False), p.get('underline', False),
-                                     p.get('align', 'LEFT'), 130, page_break=brk))
+                                     p.get('align', 'LEFT'), 130, page_break=brk, color=p.get('color')))
             elif kind == 't':
                 out.append(self.table(rest[0], page_break=brk))
             brk = False
@@ -694,12 +735,14 @@ class Hwpx:
                 f'{pbf_xml}</hp:secPr>')
 
     def header_xml(self):
-        font = ('<hh:font id="0" face="함초롬돋움" type="TTF" isEmbedded="0"><hh:typeInfo familyType="FCAT_GOTHIC" weight="6" '
+        font = (f'<hh:font id="0" face="{self.theme["font_hwpx"]}" type="TTF" isEmbedded="0"><hh:typeInfo familyType="FCAT_GOTHIC" weight="6" '
                 'proportion="4" contrast="0" strokeVariation="1" armStyle="1" letterform="1" midline="1" xHeight="1"/></hh:font>')
         fontfaces = ''.join(f'<hh:fontface lang="{lg}" fontCnt="1">{font}</hh:fontface>' for lg in LANGS)
 
         def bf_xml(i, l, r, t, b, bg, line='SOLID', width='0.12 mm'):
-            side = lambda on: f'type="{line if on else "NONE"}" width="{width if on else "0.1 mm"}" color="#000000"'
+            # 표 선은 시안의 선 색, 쪽 테두리(이중선)는 시안의 강조색
+            border_color = self.theme['accent'] if line == 'DOUBLE_SLIM' else self.theme['line']
+            side = lambda on: f'type="{line if on else "NONE"}" width="{width if on else "0.1 mm"}" color="{border_color}"'
             fill = (f'<hc:fillBrush><hc:winBrush faceColor="{bg}" hatchColor="#999999" alpha="0"/></hc:fillBrush>' if bg else '')
             return (f'<hh:borderFill id="{i}" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0">'
                     '<hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/>'
@@ -710,11 +753,11 @@ class Hwpx:
 
         attrs7 = lambda v: ' '.join(f'{lg.lower()}="{v}"' for lg in LANGS)
         chars = []
-        for (size, bold, underline), i in sorted(self.char_prs.items(), key=lambda x: x[1]):
-            chars.append(f'<hh:charPr id="{i}" height="{int(size * 100)}" textColor="#000000" shadeColor="none" useFontSpace="0" '
+        for (size, bold, underline, color), i in sorted(self.char_prs.items(), key=lambda x: x[1]):
+            chars.append(f'<hh:charPr id="{i}" height="{int(size * 100)}" textColor="{color}" shadeColor="none" useFontSpace="0" '
                          f'useKerning="0" symMark="NONE" borderFillIDRef="2"><hh:fontRef {attrs7(0)}/><hh:ratio {attrs7(100)}/>'
                          f'<hh:spacing {attrs7(0)}/><hh:relSz {attrs7(100)}/><hh:offset {attrs7(0)}/>{"<hh:bold/>" if bold else ""}'
-                         f'<hh:underline type="{"BOTTOM" if underline else "NONE"}" shape="SOLID" color="#000000"/>'
+                         f'<hh:underline type="{"BOTTOM" if underline else "NONE"}" shape="SOLID" color="{color}"/>'
                          '<hh:strikeout shape="NONE" color="#000000"/><hh:outline type="NONE"/>'
                          '<hh:shadow type="NONE" color="#C0C0C0" offsetX="10" offsetY="10"/></hh:charPr>')
         margin = ('<hh:margin><hc:intent value="0" unit="HWPUNIT"/><hc:left value="0" unit="HWPUNIT"/><hc:right value="0" unit="HWPUNIT"/>'
@@ -781,5 +824,5 @@ class Hwpx:
         return buf.getvalue()
 
 
-def render_hwpx(blocks, images, title, page_border=False):
-    return Hwpx(images, page_border).build(blocks, title)
+def render_hwpx(blocks, images, title, page_border=False, theme=None):
+    return Hwpx(images, page_border, theme).build(blocks, title)

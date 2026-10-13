@@ -5,9 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>문서 인쇄</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+
+/* ── 문서 디자인(시안) — 발행처마다 하나를 골라 씀. 같은 값이 exports.py THEMES에도 있음 ── */
+.sheet{--lab-bg:#efefef;--lab-fg:#000;--line:#777;--accent:#000;--soft:#dfe5ee;--font:'Noto Sans KR',sans-serif;
+  --title-deco:underline;--title-align:center;--title-spacing:.5em;--title-border:none;--bar:transparent}
+.theme-blue{--lab-bg:#e3edf9;--lab-fg:#0b3f7a;--line:#8fa9c9;--accent:#0b4f9c;--soft:#e3edf9;
+  --title-deco:none;--bar:#0b4f9c}
+.theme-modern{--lab-bg:#2f3640;--lab-fg:#fff;--line:#9aa0a6;--accent:#2f3640;--soft:#eef0f2;
+  --title-deco:none;--title-align:left;--title-spacing:.08em;--title-border:3px solid #2f3640}
+.theme-serif{--lab-bg:#e8f1ec;--lab-fg:#1f4d3a;--line:#8aa898;--accent:#1f4d3a;--soft:#e8f1ec;
+  --font:'Noto Serif KR',serif;--title-deco:none;--title-border:4px double #1f4d3a}
+.sheet{font-family:var(--font)}
+.sheet::before{content:'';position:absolute;left:0;right:0;top:0;height:5mm;background:var(--bar)}
+.theme-modern .title,.theme-modern .wc-title{padding-left:0}
 @page{size:A4;margin:0}
 html,body{background:#8a8a8e;font-family:'Noto Sans KR',-apple-system,sans-serif;color:#000;
   -webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -36,17 +49,18 @@ html,body{background:#8a8a8e;font-family:'Noto Sans KR',-apple-system,sans-serif
 
 /* 공통 표 */
 table{border-collapse:collapse;width:100%}
-td,th{border:1px solid #777;padding:2px 6px;height:7.4mm;vertical-align:middle;font-weight:400}
-th,.lab{background:#efefef;text-align:center;font-weight:700;white-space:nowrap}
+td,th{border:1px solid var(--line);padding:2px 6px;height:7.4mm;vertical-align:middle;font-weight:400}
+th,.lab{background:var(--lab-bg);color:var(--lab-fg);text-align:center;font-weight:700;white-space:nowrap}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .ctr{text-align:center}
-.title{font-size:23pt;font-weight:700;text-align:center;letter-spacing:.5em;text-decoration:underline;
-  text-underline-offset:6px;margin:2mm 0 6mm;padding-left:.5em}
+.title{font-size:23pt;font-weight:700;text-align:var(--title-align);letter-spacing:var(--title-spacing);
+  text-decoration:var(--title-deco);color:var(--accent);border-bottom:var(--title-border);
+  text-underline-offset:6px;margin:2mm 0 6mm;padding-left:var(--title-spacing);padding-bottom:1mm}
 .logo{height:7mm}
 .stamp-wrap{position:relative;display:inline-block}
 .stamp{position:absolute;width:15mm;height:15mm;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.92}
-.vert{font-weight:700;background:#efefef;text-align:center;width:7mm;padding:0;line-height:1.5}
-.box{border:1px solid #777;padding:2mm 4mm}
+.vert{font-weight:700;background:var(--lab-bg);color:var(--lab-fg);text-align:center;width:7mm;padding:0;line-height:1.5}
+.box{border:1px solid var(--line);padding:2mm 4mm}
 .amount-line{display:flex;justify-content:space-between;font-weight:700;font-size:11.5pt}
 .multiline{white-space:pre-wrap}
 
@@ -61,20 +75,21 @@ th,.lab{background:#efefef;text-align:center;font-weight:700;white-space:nowrap}
 .contract{font-size:10.5pt}
 .contract td{height:9.6mm;padding:2px 8px}
 .contract td.ctr{white-space:nowrap;letter-spacing:-.02em}
-.contract .tt{font-size:17pt;font-weight:700;text-align:center;letter-spacing:.1em}
+.contract .tt{font-size:17pt;font-weight:700;text-align:center;letter-spacing:.1em;color:var(--accent)}
 .contract .sign td{border:none;height:auto;padding:1.4mm 0;vertical-align:top}
 
 /* 작업완료확인서 */
-.frame{position:absolute;inset:7mm;border:3px double #000;pointer-events:none}
-.wc-title{font-size:22pt;text-align:center;margin:30mm 0 12mm;letter-spacing:.15em}
+.frame{position:absolute;inset:7mm;border:3px double var(--accent);pointer-events:none}
+.wc-title{font-size:22pt;text-align:var(--title-align);margin:30mm 0 12mm;letter-spacing:.15em;color:var(--accent);
+  border-bottom:var(--title-border);padding-bottom:2mm}
 .wc-table{width:178mm;margin:0 auto}
-.wc-table td{border:none;border-bottom:2px solid #fff;background:#dfe5ee;height:11mm;font-size:11pt;padding:0 4mm}
+.wc-table td{border:none;border-bottom:2px solid #fff;background:var(--soft);height:11mm;font-size:11pt;padding:0 4mm}
 .wc-table td:first-child{width:30mm;white-space:nowrap}
 .wc-attach{font-size:12pt;margin:34mm 0 0 8mm}
 .wc-date{text-align:center;font-size:13pt;margin-top:14mm}
 .wc-sign{position:absolute;left:96mm;top:236mm;font-size:10.5pt;line-height:2}
 
-.ph-title{font-size:14pt;font-weight:700;text-align:center;margin:3mm 0 6mm}
+.ph-title{font-size:14pt;font-weight:700;text-align:center;margin:3mm 0 6mm;color:var(--accent)}
 .ph-row{display:flex;gap:4mm;margin-bottom:5mm;align-items:stretch}
 .ph-label{width:9mm;font-weight:700;font-size:10.5pt;line-height:1.35;
   display:flex;align-items:center;justify-content:center;text-align:center}
@@ -386,6 +401,7 @@ function renderPhotoGrid(photos){
 }
 
 function goBack(){
+  if(new URLSearchParams(location.search).get('preview')) { location.href = '/#settings'; return; }
   // 앱으로 돌아가 같은 문서 편집 화면을 연다
   location.href = '/#doc=' + docId();
 }
@@ -401,8 +417,54 @@ window.addEventListener('resize', fitWidth);
 window.addEventListener('beforeprint', () => document.getElementById('pages').style.zoom = 1);
 window.addEventListener('afterprint', fitWidth);
 
+// 문서 디자인 적용 (발행처마다 고른 시안)
+function applyTheme(el, co){
+  el.querySelectorAll('.sheet').forEach(sh => sh.classList.add('theme-' + (co.theme || 'classic')));
+}
+
+// 미리보기용 예시 문서 — 설정에서 시안을 고를 때 사용 (/print.html?preview=quote&c=<발행처>&theme=<시안>)
+function sampleDoc(type, co){
+  const today = new Date().toISOString().slice(0, 10);
+  const client = {biz_no:'123-45-67890', ceo:'홍길동', address:'경기도 양주시 옥정동 000-0', tel:'031-000-0000'};
+  const items = [{name:'PB-S250MA 가압펌프', spec:'ea', qty:1, price:363000}, {name:'메카니컬씰', spec:'ea', qty:2, price:45000},
+                 {name:'인건비', spec:'식', qty:1, price:200000}];
+  const data = {
+    quote: {client, items, vat_mode:'excluded', valid_until:'견적 후 30일', note: co.quote_note || ''},
+    statement: {client, items, vat_mode:'excluded', note:''},
+    contract: {client, vat_mode:'excluded', perf_bond:'생 략', defect_bond:'10%', warranty:'준공일로부터 6개월',
+      delay_rate:'계약금액(VAT 포함) × (1/1000) × 총 지체일수', start_date:today, end_date:today, attachments:'1. 견적서'},
+    completion: {vat_mode:'excluded', contract_date:today, start_date:today, end_date:today, photo_layout:'grid', photos:[]},
+  }[type];
+  return {doc_type:type, doc_date:today, client_name:'○○아파트 입주자대표회의', title:'급수펌프 교체 공사',
+          supply_amount:653000, tax_amount:65300, data, company:co};
+}
+
+async function initPreview(params){
+  const companies = await (await fetch('/api/settings/companies')).json();
+  const co = {...(companies.find(c => c.id === params.get('c')) || companies[0])};
+  if(params.get('theme')) co.theme = params.get('theme');
+  const type = params.get('preview');
+  const names = {classic:'기본', blue:'블루', modern:'모던', serif:'클래식 명조'};
+  document.querySelector('.dl').innerHTML = Object.keys(TYPE_NAME).map(t =>
+    `<button class="${t === type ? 'primary' : 'ghost'}" onclick="previewType('${t}')">${TYPE_NAME[t].replace('공사도급표준', '')}</button>`).join('');
+  document.querySelector('.hint').textContent = `디자인 미리보기 · ${co.name} · ${names[co.theme] || '기본'} — 예시 내용입니다`;
+  document.getElementById('docName').textContent = '미리보기';
+  const el = document.getElementById('pages');
+  el.innerHTML = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion}[type](sampleDoc(type, co), co);
+  applyTheme(el, co);
+  fitWidth();
+}
+
+function previewType(t){
+  const p = new URLSearchParams(location.search);
+  p.set('preview', t);
+  location.replace('?' + p.toString());
+}
+
 async function init(){
-  const id = new URLSearchParams(location.search).get('id');
+  const params = new URLSearchParams(location.search);
+  if(params.get('preview')) return initPreview(params);
+  const id = params.get('id');
   const el = document.getElementById('pages');
   try {
     const r = await fetch('/api/documents/' + id);
@@ -411,6 +473,7 @@ async function init(){
     const co = doc.company;
     const render = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion}[doc.doc_type];
     el.innerHTML = render(doc, co);
+    applyTheme(el, co);
     const name = `${TYPE_NAME[doc.doc_type]}_${doc.client_name||doc.site_name||''}_${(doc.doc_date||'').replace(/-/g,'')}`;
     document.title = name;  // PDF 저장 시 파일명
     document.getElementById('docName').textContent = name;

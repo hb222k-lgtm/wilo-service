@@ -95,6 +95,8 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--primary)}
 .form-group textarea{resize:vertical;min-height:80px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-row > *{min-width:0}
+.form-group input[type=date],.form-group input[type=time]{min-width:0;display:block;-webkit-appearance:none;appearance:none;min-height:42px}
 
 /* Buttons */
 .btn{display:block;width:100%;padding:13px;border:none;border-radius:12px;font-size:16px;
@@ -1355,7 +1357,7 @@ const App = {
         this.toast('사진 저장 중...');
         for(const file of files) {
           const fd = new FormData();
-          fd.append('photo', file);
+          fd.append('photo', await photoForUpload(file));
           fd.append('visit_id', visit.id);
           await API.upload('/sites/'+siteId+'/photos', fd).catch(()=>{});
         }
@@ -1526,7 +1528,7 @@ const App = {
         this.toast('사진 저장 중...');
         for(const file of files) {
           const fd = new FormData();
-          fd.append('photo', file);
+          fd.append('photo', await photoForUpload(file));
           await API.upload('/schedules/'+sched.id+'/photos', fd).catch(()=>{});
         }
       }
@@ -2263,7 +2265,11 @@ const App = {
           <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="App.addManualPrice()">+ 품목 추가</button>
         </div>
       </div>
-      <div style="height:24px"></div>`;
+      <div id="server-info" style="text-align:center;font-size:12px;color:var(--sub);padding:8px 0 24px"></div>`;
+    fetch('/api/health').then(r => r.json()).then(h => {
+      document.getElementById('server-info').textContent =
+        `서버 버전 ${h.commit || '-'} · 아이폰 사진(HEIC) 변환 ${h.heic ? '사용 가능' : '불가'}`;
+    }).catch(() => {});
   },
 
   priceListHtml(items, deletable) {
@@ -2338,6 +2344,23 @@ function setPath(o, path, v) {
   const last = ks.pop();
   ks.reduce((x, k) => x[k], o)[last] = v;
 }
+// 업로드 전에 사진을 JPG로 변환 — 아이폰 HEIC도 서버가 바로 받을 수 있고, 긴 변 2560px로 줄여 빨리 올라감
+async function photoForUpload(file) {
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = url; });
+    const scale = Math.min(1, 2560 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * scale);
+    c.height = Math.round(img.naturalHeight * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
+    return blob ? new File([blob], 'photo.jpg', {type: 'image/jpeg'}) : file;
+  } catch(e) {
+    return file;  // 브라우저가 못 여는 형식은 원본 그대로 (서버에서 변환)
+  }
+}
 function fmtDatetime(d) {
   if(!d) return '-';
   const dt = new Date(d.replace(' ', 'T'));
@@ -2387,7 +2410,7 @@ document.getElementById('photoInput').addEventListener('change', async function(
   let ok = 0;
   for(const file of files) {
     const fd = new FormData();
-    fd.append('photo', file);
+    fd.append('photo', await photoForUpload(file));
     if(visitId) fd.append('visit_id', visitId);
     try {
       await API.upload('/sites/'+App.currentSite.id+'/photos', fd);
@@ -2428,7 +2451,7 @@ document.getElementById('docPhotoInput').addEventListener('change', async functi
   const uploaded = [];
   for(const file of files) {
     const fd = new FormData();
-    fd.append('photo', file);
+    fd.append('photo', await photoForUpload(file));
     try { uploaded.push(await API.upload('/documents/photos', fd)); }
     catch(e) { App.toast('사진 업로드 실패: ' + (e.message||'오류'), 'warn'); }
   }
@@ -2440,7 +2463,7 @@ document.getElementById('stampInput').addEventListener('change', async function(
   this.value = '';
   if(!file) return;
   const fd = new FormData();
-  fd.append('photo', file);
+  fd.append('photo', file);  // 직인은 투명 배경 유지를 위해 원본 그대로
   try {
     await API.upload('/settings/stamp', fd);
     App.toast('직인이 등록됐습니다');

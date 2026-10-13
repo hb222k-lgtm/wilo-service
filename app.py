@@ -8,8 +8,9 @@ from werkzeug.utils import secure_filename
 try:
     from pillow_heif import register_heif_opener
     register_heif_opener()  # 아이폰 사진(HEIC/HEIF)도 열 수 있게
+    HEIC_OK = True
 except ImportError:
-    pass
+    HEIC_OK = False
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -686,6 +687,12 @@ def delete_memo(mid):
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
+
+
+@app.route('/api/health')
+def health():
+    """배포 확인용: 서버 버전(커밋)과 HEIC 변환 가능 여부"""
+    return jsonify({'ok': True, 'heic': HEIC_OK, 'commit': os.environ.get('RAILWAY_GIT_COMMIT_SHA', '')[:7]})
 
 
 # ── Settings (회사 정보 / 직인) ──────────────────────────────────────────────

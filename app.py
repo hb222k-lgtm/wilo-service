@@ -794,6 +794,19 @@ def delete_company(cid):
     return jsonify(companies)
 
 
+def clear_white_background(img):
+    """도장 사진의 흰 바탕을 투명하게 + 여백 잘라내기 (이미 투명 배경이면 그대로)"""
+    from PIL import ImageChops
+    r, g, b, a = img.split()
+    if a.getextrema() == (255, 255):
+        lightest = ImageChops.darker(ImageChops.darker(r, g), b)  # 픽셀별 가장 어두운 채널
+        # 거의 흰색(>225)은 투명, 진한 색(<180)은 그대로, 그 사이는 부드럽게
+        mask = lightest.point(lambda v: 0 if v > 225 else 255 if v < 180 else int((225 - v) * 255 / 45))
+        img.putalpha(mask)
+    box = img.getchannel('A').point(lambda v: 255 if v > 20 else 0).getbbox()
+    return img.crop(box) if box else img
+
+
 @app.route('/api/settings/stamp', methods=['POST'])
 def upload_stamp():
     if 'photo' not in request.files:
@@ -801,6 +814,7 @@ def upload_stamp():
     try:
         img = Image.open(request.files['photo'].stream)
         img = ImageOps.exif_transpose(img).convert('RGBA')
+        img = clear_white_background(img)
         img.thumbnail((400, 400), Image.LANCZOS)
         img.save(stamp_path(request.args.get('c') or 'wilo'), 'PNG')
     except Exception:

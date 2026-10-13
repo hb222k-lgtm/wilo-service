@@ -2277,14 +2277,13 @@ const App = {
         <button class="btn btn-primary" style="margin-bottom:10px" onclick="App.saveCompany()">${isNew ? '발행처 추가' : '저장'}</button>
         ${!isNew && companies[0].id !== co.id ? `<button class="btn btn-outline" style="margin-bottom:14px;color:var(--danger)" onclick="App.deleteCompany('${co.id}')">이 발행처 삭제</button>` : ''}
       </div>
-      ${isNew ? '' : `<div class="edit-section"><h3>직인 (도장) — ${esc(co.name)}</h3>
+      <div class="edit-section"><h3>직인 (도장) — ${isNew ? '새 발행처' : esc(co.name)}</h3>
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
-          ${co.has_stamp ? `<img src="/api/stamp?c=${encodeURIComponent(co.id)}&t=${Date.now()}" style="width:64px;height:64px;object-fit:contain;border:1px solid var(--border);border-radius:8px">`
-            : `<div style="width:64px;height:64px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px">없음</div>`}
-          <div style="flex:1;font-size:13px;color:var(--sub)">배경이 투명한 PNG가 가장 깔끔합니다</div>
-          <button class="btn btn-sm btn-outline" onclick="document.getElementById('stampInput').click()">${co.has_stamp ? '변경' : '등록'}</button>
+          <div id="stamp-preview">${this.stampPreviewHtml(isNew ? this._pendingStampUrl : (co.has_stamp ? `/api/stamp?c=${encodeURIComponent(co.id)}&t=${Date.now()}` : ''))}</div>
+          <div style="flex:1;font-size:13px;color:var(--sub);line-height:1.5">도장 사진을 그대로 올리면 바탕은 자동으로 지워집니다${isNew ? '<br>「발행처 추가」를 누를 때 함께 저장됩니다' : ''}</div>
+          <button class="btn btn-sm btn-outline" onclick="document.getElementById('stampInput').click()">${co.has_stamp || (isNew && this._pendingStamp) ? '변경' : '등록'}</button>
         </div>
-      </div>`}
+      </div>
       <div class="edit-section"><h3>단가표 <span class="badge badge-blue">${prices.total}개</span></h3>
         <div style="font-size:13px;color:var(--sub);margin-bottom:10px;line-height:1.5">윌로 가격표 엑셀(.xlsx)을 불러오면 견적서·명세서에서 모델명으로 검색해 소비자가가 자동 입력됩니다. 다시 불러오면 이전 엑셀 단가표만 교체되고, 아래에 직접 추가한 품목은 유지됩니다.</div>
         <button class="btn btn-outline" style="margin-bottom:14px;padding:11px;font-size:15px" onclick="document.getElementById('priceFileInput').click()">📊 엑셀 단가표 불러오기</button>
@@ -2346,7 +2345,21 @@ const App = {
 
   editCompany(id) {
     this._editCompanyId = id;
+    this._pendingStamp = this._pendingStampUrl = null;
     this.renderDocSettings();
+  },
+
+  stampPreviewHtml(src) {
+    return src
+      ? `<img src="${src}" style="width:64px;height:64px;object-fit:contain;border:1px solid var(--border);border-radius:8px">`
+      : `<div style="width:64px;height:64px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:12px">없음</div>`;
+  },
+
+  async uploadStamp(companyId, file) {
+    const fd = new FormData();
+    // 투명 배경 PNG·WEBP는 원본 그대로, 그 밖의 사진(아이폰 HEIC 등)은 JPG로 바꿔서
+    fd.append('photo', /png|webp/.test(file.type) ? file : await photoForUpload(file));
+    await API.upload('/settings/stamp?c=' + encodeURIComponent(companyId), fd);
   },
 
   async saveCompany() {
@@ -2357,6 +2370,11 @@ const App = {
       const isNew = this._editCompanyId === 'new';
       this.companies = await API.put('/settings/companies/' + this._editCompanyId, body);
       if(isNew) this._editCompanyId = this.companies[this.companies.length - 1].id;
+      if(isNew && this._pendingStamp) {
+        try { await this.uploadStamp(this._editCompanyId, this._pendingStamp); }
+        catch(e) { this.toast('발행처는 추가됐지만 직인 등록 실패: ' + e.message, 'warn'); }
+        this._pendingStamp = this._pendingStampUrl = null;
+      }
       this.toast(isNew ? '발행처가 추가됐습니다' : '저장됐습니다');
       this.renderDocSettings();
     } catch(e) { this.toast('저장 실패: ' + e.message, 'warn'); }
@@ -2514,13 +2532,18 @@ document.getElementById('stampInput').addEventListener('change', async function(
   const file = this.files[0];
   this.value = '';
   if(!file) return;
-  const fd = new FormData();
-  fd.append('photo', file);  // 직인은 투명 배경 유지를 위해 원본 그대로
+  // 새 발행처는 아직 저장 전이라 미리보기만 — 「발행처 추가」 때 함께 올린다 (입력한 내용이 지워지지 않게 다시 그리지 않음)
+  if(App._editCompanyId === 'new') {
+    App._pendingStamp = file;
+    App._pendingStampUrl = URL.createObjectURL(file);
+    document.getElementById('stamp-preview').innerHTML = App.stampPreviewHtml(App._pendingStampUrl);
+    return;
+  }
   try {
-    await API.upload('/settings/stamp?c=' + encodeURIComponent(App._editCompanyId || 'wilo'), fd);
+    await App.uploadStamp(App._editCompanyId || 'wilo', file);
     App.toast('직인이 등록됐습니다');
     App.renderDocSettings();
-  } catch(e) { App.toast('직인 등록 실패', 'warn'); }
+  } catch(e) { App.toast('직인 등록 실패: ' + (e.message || '오류'), 'warn'); }
 });
 
 document.getElementById('priceFileInput').addEventListener('change', async function() {

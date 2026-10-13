@@ -795,14 +795,21 @@ def delete_company(cid):
 
 
 def clear_white_background(img):
-    """도장 사진의 흰 바탕을 투명하게 + 여백 잘라내기 (이미 투명 배경이면 그대로)"""
+    """도장 사진의 바탕(흰 종이 · 약간 회색인 종이 사진 포함)을 투명하게 + 여백 잘라내기
+    (이미 투명 배경이면 그대로)"""
     from PIL import ImageChops
-    r, g, b, a = img.split()
-    if a.getextrema() == (255, 255):
-        lightest = ImageChops.darker(ImageChops.darker(r, g), b)  # 픽셀별 가장 어두운 채널
-        # 거의 흰색(>225)은 투명, 진한 색(<180)은 그대로, 그 사이는 부드럽게
-        mask = lightest.point(lambda v: 0 if v > 225 else 255 if v < 180 else int((225 - v) * 255 / 45))
-        img.putalpha(mask)
+    if img.getchannel('A').getextrema() == (255, 255):
+        rgb = img.convert('RGB')
+        # 사진 가장자리 픽셀로 바탕색 추정
+        small = rgb.resize((64, 64))
+        edge = [small.getpixel((x, y)) for x in range(64) for y in (0, 1, 62, 63)] + \
+               [small.getpixel((x, y)) for y in range(64) for x in (0, 1, 62, 63)]
+        bg = tuple(sorted(p[i] for p in edge)[len(edge) // 2] for i in range(3))
+        diff = ImageChops.difference(rgb, Image.new('RGB', rgb.size, bg))
+        dr, dg, db = diff.split()
+        dist = ImageChops.lighter(ImageChops.lighter(dr, dg), db)  # 바탕색과 가장 많이 다른 채널
+        # 바탕과 비슷하면 투명, 확실히 다르면 그대로, 그 사이는 부드럽게
+        img.putalpha(dist.point(lambda v: 0 if v < 30 else 255 if v > 80 else int((v - 30) * 255 / 50)))
     box = img.getchannel('A').point(lambda v: 255 if v > 20 else 0).getbbox()
     return img.crop(box) if box else img
 

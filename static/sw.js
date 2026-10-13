@@ -1,4 +1,4 @@
-const CACHE = 'wilo-v5';
+const CACHE = 'wilo-v6';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -14,6 +14,9 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // 저장 · 업로드(POST/PUT/DELETE)는 건드리지 않고 브라우저가 바로 보내게 한다.
+  // 아이폰 사파리는 서비스워커를 거치면 첨부 파일(사진)이 빠지는 버그가 있다.
+  if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.pathname.startsWith('/api/')) {
     e.respondWith(

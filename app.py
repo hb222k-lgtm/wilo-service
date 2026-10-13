@@ -5,6 +5,12 @@ import sqlite3, os, uuid, io, json
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()  # 아이폰 사진(HEIC/HEIF)도 열 수 있게
+except ImportError:
+    pass
+
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
@@ -13,7 +19,6 @@ DATA_DIR  = os.environ.get('DATA_DIR', 'data')
 DB_PATH   = os.path.join(DATA_DIR, 'service.db')
 PHOTO_DIR = os.path.join(DATA_DIR, 'photos')
 THUMB_DIR = os.path.join(DATA_DIR, 'thumbs')
-ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'}
 
 os.makedirs(PHOTO_DIR, exist_ok=True)
 os.makedirs(THUMB_DIR, exist_ok=True)
@@ -375,28 +380,63 @@ def upload_photo(sid):
     return jsonify(dict(row)), 201
 
 
+def save_jpeg(img, photo_path, thumb_path):
+    """사진을 JPG로 저장 (긴 변 최대 2560px) + 썸네일"""
+    img = ImageOps.exif_transpose(img)  # 아이폰 EXIF 회전 방향 보정
+    img = img.convert('RGB')
+    img.thumbnail((2560, 2560), Image.LANCZOS)
+    img.save(photo_path, 'JPEG', quality=85)
+    img.thumbnail((400, 400), Image.LANCZOS)
+    img.save(thumb_path, 'JPEG', quality=70)
+
+
 def save_photo_file(f, folder_key):
-    ext = os.path.splitext(secure_filename(f.filename or 'photo.jpg'))[1].lower() or '.jpg'
-    if ext not in ALLOWED_EXT:
-        return None, 'Invalid file type'
+    # 확장자가 아니라 내용으로 판단 (한글 파일명 · HEIC 등)
+    try:
+        img = Image.open(io.BytesIO(f.read()))
+        img.load()
+    except Exception:
+        return None, '사진 파일을 열 수 없습니다 (JPG · PNG · HEIC만 가능)'
     pid = str(uuid.uuid4())
     filename = f'{pid}.jpg'
     photo_dir = os.path.join(PHOTO_DIR, folder_key)
     thumb_dir = os.path.join(THUMB_DIR, folder_key)
     os.makedirs(photo_dir, exist_ok=True)
     os.makedirs(thumb_dir, exist_ok=True)
-    raw = f.read()
-    try:
-        img = Image.open(io.BytesIO(raw))
-        img = ImageOps.exif_transpose(img)  # 아이폰 EXIF 회전 방향 보정
-        img = img.convert('RGB')
-        img.save(os.path.join(photo_dir, filename), 'JPEG', quality=85)
-        img.thumbnail((400, 400), Image.LANCZOS)
-        img.save(os.path.join(thumb_dir, filename), 'JPEG', quality=70)
-    except Exception:
-        with open(os.path.join(photo_dir, filename), 'wb') as fh:
-            fh.write(raw)
+    save_jpeg(img, os.path.join(photo_dir, filename), os.path.join(thumb_dir, filename))
     return pid, filename
+
+
+def fix_heic_photos():
+    """예전에 변환 없이 저장된 아이폰 사진(HEIC 내용의 .jpg)을 진짜 JPG로 바꾼다 — 서버 시작 시 1회"""
+    lock = os.path.join(DATA_DIR, '.heic_fix.lock')
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL)  # gunicorn 워커가 여럿이어도 한 번만
+    except FileExistsError:
+        return
+    os.close(fd)
+    try:
+        for folder in os.listdir(PHOTO_DIR):
+            src_dir = os.path.join(PHOTO_DIR, folder)
+            if not os.path.isdir(src_dir):
+                continue
+            for name in os.listdir(src_dir):
+                path = os.path.join(src_dir, name)
+                try:
+                    with open(path, 'rb') as fh:
+                        head = fh.read(12)
+                    if head[4:8] != b'ftyp':  # JPG/PNG는 건너뜀
+                        continue
+                    os.makedirs(os.path.join(THUMB_DIR, folder), exist_ok=True)
+                    save_jpeg(Image.open(path), path, os.path.join(THUMB_DIR, folder, name))
+                except Exception:
+                    pass
+    finally:
+        os.remove(lock)
+
+
+import threading
+threading.Thread(target=fix_heic_photos, daemon=True).start()
 
 
 @app.route('/api/photo/<folder>/<filename>')

@@ -659,7 +659,11 @@ const API = {
       throw new Error('오프라인');
     }
     App.setOffline(false);
-    if(!r.ok) throw new Error(`서버 오류 (${r.status})`);
+    if(!r.ok) {
+      let msg = `서버 오류 (${r.status})`;
+      try { const j = await r.json(); if(j.error) msg = j.error; } catch(_){}
+      throw new Error(msg);
+    }
     return await r.json();
   }
 };

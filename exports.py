@@ -457,16 +457,17 @@ def card_trade(doc, co, kind):
         sub1 += ('\n' + c['address']) if c.get('address') else ''
         sub2 = '연락처 ' + c['tel'] if c.get('tel') else ''
     soft = lambda t='', **kw: C(t, bg=SOFT, **kw)
-    acc = lambda t='', **kw: C(t, bg=ACCENT, color=WHITE, **kw)
+    def acc(t='', b=(1, 1, 1, 1), **kw):  # 인쇄용: 채우지 않고 강조색 글씨 + 테두리
+        return C(t, color=ACCENT, b=b, **kw)
     widths = item_widths(K['numbered'])
     return card_top(co, K['plain'], K['en'], doc) + [
         ('s', 5),
         T([57, 4, 57, 4, 58], [
             (6.5, [soft('받는 분' if kind == 'quote' else '공급받는자', color=ACCENT, bold=True, size=8.5), C(rs=3),
-                   soft('공사명', color=ACCENT, bold=True, size=8.5), C(rs=3), acc(f'합계 금액 · {vat_word(d)}', bold=True, size=8.5)]),
-            (9, [soft(doc['client_name'], bold=True, size=11), soft(doc.get('title'), bold=True, size=11), acc(f'₩{won(total)}', bold=True, size=17)]),
+                   soft('공사명', color=ACCENT, bold=True, size=8.5), C(rs=3), acc(f'합계 금액 · {vat_word(d)}', b=(1, 1, 1, 0), bold=True, size=8.5)]),
+            (9, [soft(doc['client_name'], bold=True, size=11), soft(doc.get('title'), bold=True, size=11), acc(f'₩{won(total)}', b=(1, 1, 0, 0), bold=True, size=17)]),
             (10, [soft(sub1, size=8.5, color=MUTED, valign='TOP'), soft(sub2, size=8.5, color=MUTED, valign='TOP'),
-                  acc(f'금 {kor_num(total)}원 정', size=8.5, valign='TOP')]),
+                  acc(f'금 {kor_num(total)}원 정', b=(1, 1, 0, 1), size=8.5, valign='TOP')]),
         ], border=False),
         ('s', 3), P(K['greet'], size=9.5, color=MUTED),
         ('s', 1), T(widths, item_rows(items, d, K['numbered'], 'card'), border=False),
@@ -492,8 +493,8 @@ def side_page(doc, co, main, ncols, widths):
     info = [('대표', co.get('ceo')), ('사업자번호', co.get('biz_no')), ('주소', co.get('address')), ('전화', co.get('tel')),
             ('팩스', co.get('fax')), ('이메일', co.get('email')), ('입금계좌', bank)]
     info_text = '\n\n'.join(f'{k}\n{v}' for k, v in info if v)
-    left = {0: [C(co['name'], cs=2, rs=2, bg=ACCENT, color=WHITE, bold=True, size=14, valign='TOP')],
-            2: [C(info_text, cs=2, rs=n - 5, bg=ACCENT, color=WHITE, size=8.5, valign='TOP')],
+    left = {0: [C(co['name'], cs=2, rs=2, bg=SOFT, color=ACCENT, bold=True, size=14, valign='TOP')],
+            2: [C(info_text, cs=2, rs=n - 5, bg=SOFT, size=8.5, valign='TOP')],
             n - 3: [C(ymd(doc['doc_date']), cs=2, bg=WHITE, size=9, align='CENTER', b=(1, 1, 1, 0))],
             n - 2: [C(co['name'], cs=2, bg=WHITE, bold=True, size=10, align='CENTER', b=(1, 1, 0, 0))],
             n - 1: [C(f"대표 {co['ceo']}", bg=WHITE, size=9, align='RIGHT', b=(1, 0, 0, 1)),
@@ -580,9 +581,10 @@ def card_completion(doc, co):
     for i in range(0, len(info), 2):
         (k1, v1), (k2, v2) = info[i], info[i + 1]
         first = i == 0
-        rows += [(6, [C(k1, bg=ACCENT if first else SOFT, color=WHITE if first else ACCENT, bold=True, size=8.5), C(),
+        rows += [(6, [C(k1, bg=SOFT, color=ACCENT, bold=True, size=8.5, **({'b': (1, 1, 1, 0)} if first else {})), C(),
                       C(k2, bg=SOFT, color=ACCENT, bold=True, size=8.5)]),
-                 (11, [C(v1 or '-', bg=ACCENT if first else SOFT, color=WHITE if first else None, bold=True, size=11, valign='TOP'), C(),
+                 (11, [C(v1 or '-', bg=SOFT, color=ACCENT if first else None, bold=True, size=11, valign='TOP',
+                         **({'b': (1, 1, 0, 1)} if first else {})), C(),
                        C(v2 or '-', bg=SOFT, bold=True, size=11, valign='TOP')]),
                  (4, [C(cs=3)])]
     return card_top(co, '작업완료확인서', 'COMPLETION', doc) + [
@@ -616,7 +618,7 @@ def pretty_contract(doc, co):
         for cell in cells:
             role = cell.get('role')
             if role == 'sec':
-                cell.update(bg=ACCENT, color=WHITE)
+                cell.update(bg=SOFT, color=ACCENT, bold=True)
             elif role == 'label':
                 cell.update(bg=LABBG, color=LABFG, bold=True)
             elif role == 'text':
@@ -645,7 +647,7 @@ THEMES = {
                 'underline': True, 'title_align': 'CENTER', 'font_xlsx': '맑은 고딕', 'font_hwpx': '함초롬돋움'},
     'blue':    {'lab_bg': '#E3EDF9', 'lab_fg': '#0B3F7A', 'line': '#8FA9C9', 'accent': '#0B4F9C', 'soft': '#E3EDF9',
                 'underline': False, 'title_align': 'CENTER', 'font_xlsx': '맑은 고딕', 'font_hwpx': '함초롬돋움'},
-    'modern':  {'lab_bg': '#2F3640', 'lab_fg': '#FFFFFF', 'line': '#9AA0A6', 'accent': '#2F3640', 'soft': '#EEF0F2',
+    'modern':  {'lab_bg': '#E9ECEF', 'lab_fg': '#2F3640', 'line': '#9AA0A6', 'accent': '#2F3640', 'soft': '#F1F3F5',
                 'underline': False, 'title_align': 'LEFT', 'font_xlsx': '맑은 고딕', 'font_hwpx': '함초롬돋움'},
     'serif':   {'lab_bg': '#E8F1EC', 'lab_fg': '#1F4D3A', 'line': '#8AA898', 'accent': '#1F4D3A', 'soft': '#E8F1EC',
                 'underline': False, 'title_align': 'CENTER', 'font_xlsx': '바탕', 'font_hwpx': '함초롬바탕'},

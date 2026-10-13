@@ -281,9 +281,9 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 .lc-mini .lk-head b{width:38%;height:6px;background:var(--primary)}.lc-mini .lk-head s{width:22%;height:6px;background:#8e8e93}
 .lc-mini .lk-stripes{flex:1;background:repeating-linear-gradient(#e3f0ff 0 5px,#fff 5px 10px)}
 .lc-mini .lk-cards{display:flex;gap:4px}.lc-mini .lk-cards i{flex:1;height:16px;background:#e3f0ff;border-radius:4px}
-.lc-mini .lk-cards i.acc{background:var(--primary)}
+.lc-mini .lk-cards i.acc{background:#fff;border:2px solid var(--primary)}
 .lc-mini .lk-lines{flex:1;background:repeating-linear-gradient(#fff 0 6px,#e5e5ea 6px 7px)}
-.lc-mini .lk-side{display:flex;gap:6px;flex:1}.lc-mini .lk-side > i{width:28%;background:var(--primary);border-radius:2px}
+.lc-mini .lk-side{display:flex;gap:6px;flex:1}.lc-mini .lk-side > i{width:28%;background:#e3f0ff;border-right:2px solid var(--primary)}
 .lc-mini .lk-side > div{flex:1;display:flex;flex-direction:column;gap:5px}
 .tc-foot{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-top:1px solid var(--border);font-size:13px}
 .tc-foot a{color:var(--primary);font-weight:600;white-space:nowrap;margin-left:6px}
@@ -622,7 +622,7 @@ const DOC_LAYOUT_LIST = [
 const DOC_THEMES = [
   {id:'classic', name:'기본',       labBg:'#efefef', labFg:'#000', line:'#777',    accent:'#000',    bar:'transparent', align:'center', deco:'underline', titleBorder:'none', font:'inherit'},
   {id:'blue',    name:'블루',       labBg:'#e3edf9', labFg:'#0b3f7a', line:'#8fa9c9', accent:'#0b4f9c', bar:'#0b4f9c', align:'center', deco:'none', titleBorder:'none', font:'inherit'},
-  {id:'modern',  name:'모던',       labBg:'#2f3640', labFg:'#fff', line:'#9aa0a6', accent:'#2f3640', bar:'transparent', align:'left', deco:'none', titleBorder:'2px solid #2f3640', font:'inherit'},
+  {id:'modern',  name:'모던',       labBg:'#e9ecef', labFg:'#2f3640', line:'#9aa0a6', accent:'#2f3640', bar:'transparent', align:'left', deco:'none', titleBorder:'2px solid #2f3640', font:'inherit'},
   {id:'serif',   name:'클래식 명조', labBg:'#e8f1ec', labFg:'#1f4d3a', line:'#8aa898', accent:'#1f4d3a', bar:'transparent', align:'center', deco:'none', titleBorder:'3px double #1f4d3a', font:'serif'},
 ];
 const CLIENT_FIELDS = [['biz_no','사업자번호'],['ceo','대표자'],['address','주소'],['tel','연락처'],['fax','팩스']];

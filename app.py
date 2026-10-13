@@ -699,8 +699,9 @@ def health():
 # 발행처(공급자)는 여러 개 — 문서마다 고른다. 첫 번째가 기본.
 
 COMPANY_FIELDS = ['name', 'biz_no', 'ceo', 'address', 'tel', 'fax', 'mobile', 'email',
-                  'biz_type', 'biz_item', 'bank', 'quote_note', 'theme']
-THEMES = ('classic', 'blue', 'modern', 'serif')  # 문서 디자인 시안
+                  'biz_type', 'biz_item', 'bank', 'quote_note', 'theme', 'layout']
+THEMES = ('classic', 'blue', 'modern', 'serif')       # 문서 색 시안
+DOC_LAYOUTS = ('table', 'letter', 'card', 'sidebar')  # 문서 배치
 DEFAULT_COMPANIES = [
     {'id': 'wilo', 'name': '윌로펌프서비스', 'biz_no': '780-29-01203', 'ceo': '강한빛',
      'address': '경기도 양주시 부흥로 2061-8 1층 T3호', 'tel': '031-821-0613', 'fax': '031-821-0614',
@@ -765,6 +766,8 @@ def save_company(cid):
     item['show_logo'] = bool(d.get('show_logo'))
     if item['theme'] not in THEMES:
         item['theme'] = 'classic'
+    if item['layout'] not in DOC_LAYOUTS:
+        item['layout'] = 'table'
     conn = get_db()
     companies = load_companies(conn)
     if cid == 'new':
@@ -970,7 +973,9 @@ def export_document(did, fmt):
         data = exports.render_xlsx(blocks, images, name, exports.theme_of(company))
         mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     else:
-        data = exports.render_hwpx(blocks, images, name, page_border=doc['doc_type'] == 'completion',
+        # 작업완료서 이중 테두리는 표형 배치에서만
+        page_border = doc['doc_type'] == 'completion' and (company.get('layout') or 'table') == 'table'
+        data = exports.render_hwpx(blocks, images, name, page_border=page_border,
                                    theme=exports.theme_of(company))
         mime = 'application/hwp+zip'
     filename = f"{name}_{doc['client_name'] or ''}_{(doc['doc_date'] or '').replace('-', '')}.{fmt}"

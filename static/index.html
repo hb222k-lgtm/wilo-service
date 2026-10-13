@@ -269,8 +269,24 @@ html,body{height:100%;background:var(--bg);font-family:-apple-system,sans-serif;
 .tc-row{display:flex;margin-bottom:3px;font-size:10px}
 .tc-row span:first-child{width:34px;text-align:center;font-weight:700;padding:2px 0}
 .tc-row span:last-child{flex:1;border:1px solid}
+.lc-mini{height:74px;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+.lc-mini .lk-t{height:7px;width:40%;background:var(--primary);border-radius:2px}
+.lc-mini .lk-t.c{margin:0 auto}
+.lc-mini .lk-row{display:flex;gap:5px}
+.lc-mini .lk-row i{flex:1;height:14px;border:1px solid #c7c7cc}
+.lc-mini .lk-row i.ln{border:none;border-bottom:1px solid #c7c7cc}
+.lc-mini .lk-row i.box{flex:.7;background:#e3f0ff;border:none;border-radius:3px}
+.lc-mini .lk-grid{flex:1;background:repeating-linear-gradient(#fff 0 6px,#c7c7cc 6px 7px);border:1px solid #c7c7cc}
+.lc-mini .lk-head{display:flex;justify-content:space-between;border-bottom:2px solid var(--primary);padding-bottom:3px}
+.lc-mini .lk-head b{width:38%;height:6px;background:var(--primary)}.lc-mini .lk-head s{width:22%;height:6px;background:#8e8e93}
+.lc-mini .lk-stripes{flex:1;background:repeating-linear-gradient(#e3f0ff 0 5px,#fff 5px 10px)}
+.lc-mini .lk-cards{display:flex;gap:4px}.lc-mini .lk-cards i{flex:1;height:16px;background:#e3f0ff;border-radius:4px}
+.lc-mini .lk-cards i.acc{background:var(--primary)}
+.lc-mini .lk-lines{flex:1;background:repeating-linear-gradient(#fff 0 6px,#e5e5ea 6px 7px)}
+.lc-mini .lk-side{display:flex;gap:6px;flex:1}.lc-mini .lk-side > i{width:28%;background:var(--primary);border-radius:2px}
+.lc-mini .lk-side > div{flex:1;display:flex;flex-direction:column;gap:5px}
 .tc-foot{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-top:1px solid var(--border);font-size:13px}
-.tc-foot a{color:var(--primary);font-weight:600}
+.tc-foot a{color:var(--primary);font-weight:600;white-space:nowrap;margin-left:6px}
 .btn-row{display:flex;gap:8px;margin:10px 16px}
 .btn-row .btn{flex:1;font-size:15px;padding:12px 8px}
 details.client summary{cursor:pointer;font-size:14px;font-weight:700;padding-bottom:12px;list-style:none}
@@ -591,7 +607,18 @@ const DOC_TYPES = {
   completion: {name:'작업완료확인서', short:'완료서', icon:'✅', client:'발주처',          date:'확인일자'},
 };
 const PHOTO_CAPTIONS = ['작업전', '작업중', '작업 완료'];
-// 문서 디자인 시안 (설정 화면 미리보기용 — 실제 양식은 print.html · exports.py)
+// 문서 배치 (설정 화면 그림 — 실제 양식은 print.html · print-layouts.js · exports.py)
+const DOC_LAYOUT_LIST = [
+  {id:'table', name:'표형', desc:'지금 쓰는 칸 양식',
+   sketch:'<div class="lk-t c"></div><div class="lk-row"><i></i><i></i></div><div class="lk-grid"></div>'},
+  {id:'letter', name:'레터형', desc:'회사 머리글 · 큰 합계',
+   sketch:'<div class="lk-head"><b></b><s></s></div><div class="lk-row"><i class="ln"></i><i class="box"></i></div><div class="lk-stripes"></div>'},
+  {id:'card', name:'카드형', desc:'둥근 상자로 정리',
+   sketch:'<div class="lk-t"></div><div class="lk-cards"><i></i><i></i><i class="acc"></i></div><div class="lk-lines"></div>'},
+  {id:'sidebar', name:'사이드바형', desc:'왼쪽 색 띠에 회사 정보',
+   sketch:'<div class="lk-side"><i></i><div><div class="lk-t"></div><div class="lk-lines"></div></div></div>'},
+];
+// 문서 색 시안 (설정 화면 미리보기용 — 실제 양식은 print.html · exports.py)
 const DOC_THEMES = [
   {id:'classic', name:'기본',       labBg:'#efefef', labFg:'#000', line:'#777',    accent:'#000',    bar:'transparent', align:'center', deco:'underline', titleBorder:'none', font:'inherit'},
   {id:'blue',    name:'블루',       labBg:'#e3edf9', labFg:'#0b3f7a', line:'#8fa9c9', accent:'#0b4f9c', bar:'#0b4f9c', align:'center', deco:'none', titleBorder:'none', font:'inherit'},
@@ -2289,7 +2316,11 @@ const App = {
         <div class="form-group"><label>입금계좌 — 한 줄에 하나씩 (첫 줄은 거래명세서 기본 계좌)</label>
           <textarea id="co-bank" style="min-height:70px" placeholder="기업은행 917-036865-01-016 윌로펌프서비스(강한빛)&#10;기업은행 439-063779-02-011 강한빛">${esc(co.bank)}</textarea></div>
         <div class="form-group"><label>견적서 기본 비고</label><textarea id="co-quote_note" style="min-height:60px">${esc(co.quote_note)}</textarea></div>
-        <div class="form-group"><label>문서 디자인 — 견적서 · 명세서 · 계약서 · 완료서에 모두 적용</label>
+        <div class="form-group"><label>문서 배치 — 견적서 · 명세서 · 계약서 · 완료서에 모두 적용</label>
+          <input type="hidden" id="co-layout" value="${esc(co.layout || 'table')}">
+          <div class="theme-grid">${DOC_LAYOUT_LIST.map(l => this.layoutCardHtml(l, co)).join('')}</div>
+        </div>
+        <div class="form-group"><label>색 · 글꼴</label>
           <input type="hidden" id="co-theme" value="${esc(co.theme || 'classic')}">
           <div class="theme-grid">${DOC_THEMES.map(t => this.themeCardHtml(t, co)).join('')}</div>
         </div>
@@ -2378,14 +2409,31 @@ const App = {
     </div>`;
   },
 
-  pickTheme(id) {
-    document.getElementById('co-theme').value = id;
-    document.querySelectorAll('.theme-card').forEach(el => el.classList.toggle('sel', el.dataset.theme === id));
+  layoutCardHtml(l, co) {
+    const sel = (co.layout || 'table') === l.id;
+    return `<div class="theme-card ${sel ? 'sel' : ''}" data-layout="${l.id}" onclick="App.pickLayout('${l.id}')">
+      <div class="lc-mini">${l.sketch}</div>
+      <div class="tc-foot"><span><b>${l.name}</b><br><small style="color:var(--sub)">${l.desc}</small></span>
+        <a onclick="event.stopPropagation();App.previewTheme(null, '${l.id}')">미리보기</a></div>
+    </div>`;
   },
 
-  previewTheme(id) {
+  pickLayout(id) {
+    document.getElementById('co-layout').value = id;
+    document.querySelectorAll('[data-layout]').forEach(el => el.classList.toggle('sel', el.dataset.layout === id));
+  },
+
+  pickTheme(id) {
+    document.getElementById('co-theme').value = id;
+    document.querySelectorAll('[data-theme]').forEach(el => el.classList.toggle('sel', el.dataset.theme === id));
+  },
+
+  // 미리보기: 지금 고른(저장 전이어도) 배치 · 색으로 예시 문서 보기
+  previewTheme(theme, layout) {
     try { sessionStorage.setItem('wilo_editCompany', this._editCompanyId || ''); } catch(e) {}
-    location.href = `/print.html?preview=quote&c=${encodeURIComponent(this._editCompanyId || '')}&theme=${id}`;
+    theme = theme || document.getElementById('co-theme').value;
+    layout = layout || document.getElementById('co-layout').value;
+    location.href = `/print.html?preview=quote&c=${encodeURIComponent(this._editCompanyId || '')}&theme=${theme}&layout=${layout}`;
   },
 
   editCompany(id) {
@@ -2409,7 +2457,7 @@ const App = {
 
   async saveCompany() {
     const body = {show_logo: document.getElementById('co-show_logo').checked};
-    ['name','ceo','biz_no','address','tel','fax','mobile','email','biz_type','biz_item','bank','quote_note','theme']
+    ['name','ceo','biz_no','address','tel','fax','mobile','email','biz_type','biz_item','bank','quote_note','theme','layout']
       .forEach(k => body[k] = document.getElementById('co-' + k).value);
     try {
       const isNew = this._editCompanyId === 'new';

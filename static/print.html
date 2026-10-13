@@ -115,6 +115,8 @@ th,.lab{background:var(--lab-bg);color:var(--lab-fg);text-align:center;font-weig
 <div id="pages"></div>
 
 <script src="/doc-utils.js"></script>
+<script src="/print-layouts.js"></script>
+<link rel="stylesheet" href="/print-layouts.css">
 <script>
 const TYPE_NAME = {quote:'견적서', statement:'거래명세서', contract:'공사도급표준계약서', completion:'작업완료확인서'};
 
@@ -317,9 +319,14 @@ function renderCompletion(doc, co){
     </div>
   </div>`;
 
-  if((d.photo_layout || 'rows') === 'grid') return html + renderPhotoGrid(d.photos || []);
+  return html + renderCompletionPhotos(d);
+}
 
-  // 사진 페이지: 한 페이지에 3줄(줄마다 사진 3장)
+// 작업사진 페이지 (모든 배치 공통) — 표형은 이중 테두리, 나머지 배치는 테두리 없이
+function renderCompletionPhotos(d){
+  if((d.photo_layout || 'rows') === 'grid') return renderPhotoGrid(d.photos || []);
+  let html = '';
+  // 항목별: 한 페이지에 3줄(줄마다 사진 3장)
   const groups = (d.groups||[]).filter(g => (g.photos||[]).length);
   for(let p=0; p<groups.length; p+=3){
     html += `<div class="sheet"><div class="frame"></div><div class="ph-title">작업사진</div>`;
@@ -419,7 +426,7 @@ window.addEventListener('afterprint', fitWidth);
 
 // 문서 디자인 적용 (발행처마다 고른 시안)
 function applyTheme(el, co){
-  el.querySelectorAll('.sheet').forEach(sh => sh.classList.add('theme-' + (co.theme || 'classic')));
+  el.querySelectorAll('.sheet').forEach(sh => sh.classList.add('theme-' + (co.theme || 'classic'), 'layout-' + (co.layout || 'table')));
 }
 
 // 미리보기용 예시 문서 — 설정에서 시안을 고를 때 사용 (/print.html?preview=quote&c=<발행처>&theme=<시안>)
@@ -443,14 +450,17 @@ async function initPreview(params){
   const companies = await (await fetch('/api/settings/companies')).json();
   const co = {...(companies.find(c => c.id === params.get('c')) || companies[0])};
   if(params.get('theme')) co.theme = params.get('theme');
+  if(params.get('layout')) co.layout = params.get('layout');
   const type = params.get('preview');
   const names = {classic:'기본', blue:'블루', modern:'모던', serif:'클래식 명조'};
   document.querySelector('.dl').innerHTML = Object.keys(TYPE_NAME).map(t =>
     `<button class="${t === type ? 'primary' : 'ghost'}" onclick="previewType('${t}')">${TYPE_NAME[t].replace('공사도급표준', '')}</button>`).join('');
-  document.querySelector('.hint').textContent = `디자인 미리보기 · ${co.name} · ${names[co.theme] || '기본'} — 예시 내용입니다`;
+  const layoutNames = {table:'표형', letter:'레터형', card:'카드형', sidebar:'사이드바형'};
+  document.querySelector('.hint').textContent =
+    `디자인 미리보기 · ${co.name} · ${layoutNames[co.layout] || '표형'} · ${names[co.theme] || '기본'} — 예시 내용입니다`;
   document.getElementById('docName').textContent = '미리보기';
   const el = document.getElementById('pages');
-  el.innerHTML = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion}[type](sampleDoc(type, co), co);
+  el.innerHTML = renderDoc(sampleDoc(type, co), co);
   applyTheme(el, co);
   fitWidth();
 }
@@ -459,6 +469,14 @@ function previewType(t){
   const p = new URLSearchParams(location.search);
   p.set('preview', t);
   location.replace('?' + p.toString());
+}
+
+// 배치(표형 · 레터형 · 카드형 · 사이드바형)에 맞는 그리기 함수 — 나머지 배치는 print-layouts.js
+function renderDoc(doc, co){
+  const layout = co.layout || 'table';
+  const table = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion};
+  const fn = layout === 'table' ? table[doc.doc_type] : (LAYOUTS[layout] || {})[doc.doc_type];
+  return (fn || table[doc.doc_type])(doc, co);
 }
 
 async function init(){
@@ -471,8 +489,7 @@ async function init(){
     if(!r.ok) throw new Error();
     const doc = await r.json();
     const co = doc.company;
-    const render = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion}[doc.doc_type];
-    el.innerHTML = render(doc, co);
+    el.innerHTML = renderDoc(doc, co);
     applyTheme(el, co);
     const name = `${TYPE_NAME[doc.doc_type]}_${doc.client_name||doc.site_name||''}_${(doc.doc_date||'').replace(/-/g,'')}`;
     document.title = name;  // PDF 저장 시 파일명

@@ -1,0 +1,143 @@
+/* 문서 배치 — 레터형 · 카드형 · 사이드바형 · 새 계약서 (print-layouts.js)
+   색은 print.html의 시안 변수(--accent, --lab-bg, --lab-fg, --line, --soft)를 따른다 */
+
+.ly-letter td,.ly-letter th,.ly-card td,.ly-card th,.ly-side td,.ly-side th,.ct2 td,.ct2 th{height:auto}
+.blank{display:inline-block;width:28mm;border-bottom:1px solid #999;margin:0 1mm;vertical-align:-1px}
+
+/* 공통: 정보 목록 · 품목표 · 합계 · 서명 */
+.ly-dl{width:auto;margin-top:2mm}
+.ly-dl th,.ly-dl td{border:none;padding:.6mm 0;font-size:9.5pt;text-align:left;background:none;vertical-align:top}
+.ly-dl th{color:var(--accent);font-weight:700;width:20mm;padding-right:3mm;white-space:nowrap}
+.ly-items{margin-top:5mm}
+.ly-items th{font-size:9pt;padding:2mm 2mm;height:auto;white-space:nowrap}
+.ly-items td{font-size:9.5pt;padding:1.6mm 2mm;height:7mm}
+.ly-items .c{text-align:center}.ly-items .r{text-align:right;font-variant-numeric:tabular-nums}
+.ly-sum{width:72mm;margin:3mm 0 0 auto}
+.ly-sum th,.ly-sum td{border:none;border-bottom:1px solid #e3e3e3;padding:1.6mm 2mm;font-size:9.5pt;background:none;color:#333}
+.ly-sum th{text-align:left;font-weight:500}
+.ly-sum td{text-align:right;font-variant-numeric:tabular-nums}
+.ly-sum .grand th,.ly-sum .grand td{border-bottom:2px solid var(--accent);color:var(--accent);font-weight:700;font-size:11.5pt}
+.ly-sign{text-align:right;line-height:1.9;font-size:10pt}
+.ly-sign b{font-size:12.5pt}
+
+/* ── 레터형 ── */
+.lt-head{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:4mm;border-bottom:2.5px solid var(--accent)}
+.lt-co-name{font-size:19pt;font-weight:700;color:var(--accent);letter-spacing:.02em}
+.lt-co-info{font-size:8.5pt;color:#555;line-height:1.6;margin-top:1.5mm}
+.lt-doc{text-align:right}
+.lt-doc .logo{display:block;margin:0 0 2mm auto}
+.lt-title{font-size:22pt;font-weight:700;letter-spacing:.35em;color:var(--accent);margin-right:-.35em}
+.lt-meta{font-size:9pt;color:#666;margin-top:1mm}
+.lt-to{display:flex;gap:6mm;margin-top:7mm;align-items:stretch}
+.lt-to-l{flex:1}
+.lt-to-name{font-size:14pt;font-weight:700}
+.lt-to-name small{font-size:10pt;font-weight:500;color:#555;margin-left:1mm}
+.lt-greet{font-size:9pt;color:#555;margin-top:3mm}
+.lt-total{width:66mm;background:var(--soft);border-radius:3mm;padding:5mm;display:flex;flex-direction:column;justify-content:center;text-align:right}
+.lt-total .lab{font-size:9pt;color:var(--accent);font-weight:700}
+.lt-total .num{font-size:21pt;font-weight:700;color:var(--accent);margin:1.5mm 0;font-variant-numeric:tabular-nums}
+.lt-total .kor{font-size:8.5pt;color:#444}
+.lt-items th{background:var(--lab-bg);color:var(--lab-fg);border:none;border-bottom:1.5px solid var(--accent)}
+.lt-items td{border:none;border-bottom:1px solid #e6e6e6}
+.lt-items tbody tr:nth-child(even) td{background:var(--soft)}
+.lt-foot{display:flex;justify-content:space-between;gap:8mm;margin-top:7mm;align-items:flex-end}
+.lt-note{flex:1;font-size:9pt;line-height:1.6}
+.lt-note b{display:block;color:var(--accent);margin-top:2mm}
+.lt-recv{padding-left:30mm}
+
+/* ── 카드형 ── */
+.cd-top{display:flex;justify-content:space-between;align-items:flex-start}
+.cd-title{font-size:26pt;font-weight:700;color:var(--accent);letter-spacing:.04em}
+.cd-sub{font-size:8.5pt;color:#888;letter-spacing:.12em;margin-top:1mm}
+.cd-brand{text-align:right}
+.cd-brand .logo{display:block;margin:0 0 1.5mm auto}
+.cd-brand-name{font-size:13pt;font-weight:700}
+.cd-cards{display:grid;gap:4mm;margin-top:6mm}
+.cd-cards.three{grid-template-columns:1fr 1fr 1.15fr}
+.cd-cards.two{grid-template-columns:1fr 1fr}
+.cd-card{background:var(--soft);border-radius:3.5mm;padding:4mm 4.5mm;min-height:22mm}
+.cd-card.acc{background:var(--accent);color:#fff}
+.cd-k{font-size:8.5pt;font-weight:700;color:var(--accent);margin-bottom:1.5mm}
+.cd-card.acc .cd-k{color:rgba(255,255,255,.85)}
+.cd-v{font-size:11.5pt;font-weight:700;line-height:1.35}
+.cd-v.big{font-size:19pt;font-variant-numeric:tabular-nums}
+.cd-s{font-size:8.5pt;color:#555;margin-top:1.5mm;line-height:1.5}
+.cd-card.acc .cd-s{color:rgba(255,255,255,.85)}
+.cd-p{font-size:9pt;line-height:1.5;min-height:8mm}
+.cd-greet,.cd-lead{font-size:9.5pt;color:#555;margin-top:5mm}
+.cd-items th{border:none;border-bottom:2px solid var(--accent);background:none;color:var(--accent);font-size:8.5pt}
+.cd-items td{border:none;border-bottom:1px solid #ececec}
+.cd-chips{display:flex;justify-content:flex-end;gap:2.5mm;margin-top:3.5mm}
+.cd-chips span{background:var(--soft);border-radius:10mm;padding:1.8mm 4.5mm;font-size:9pt}
+.cd-chips span.acc{background:var(--accent);color:#fff}
+.cd-chips b{margin-left:1.5mm;font-variant-numeric:tabular-nums}
+.cd-grid{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:5mm}
+.cd-grid .cd-card{min-height:18mm}
+.cd-attach{font-size:10pt;margin-top:8mm;color:#555}
+
+/* ── 사이드바형 ── */
+.sheet.ly-side{padding:0;display:flex}
+.sd-bar{width:56mm;background:var(--accent);color:#fff;padding:16mm 6mm 12mm;display:flex;flex-direction:column}
+.theme-classic .sd-bar{background:#222}
+.sd-logo{background:#fff;border-radius:2mm;padding:2mm;display:inline-block;margin-bottom:6mm;align-self:flex-start}
+.sd-logo .logo{display:block}
+.sd-name{font-size:16pt;font-weight:700;line-height:1.3;margin-bottom:7mm}
+.sd-info dt{font-size:7.5pt;opacity:.7;margin-top:3mm}
+.sd-info dd{font-size:9pt;line-height:1.45;word-break:keep-all}
+.sd-sign{margin-top:auto;background:#fff;color:#222;border-radius:2.5mm;padding:4mm;font-size:9pt;line-height:1.8;text-align:center}
+.sd-main{flex:1;padding:16mm 12mm 12mm 10mm;min-width:0}
+.sd-title{font-size:24pt;font-weight:700;letter-spacing:.3em;color:var(--accent)}
+.sd-meta{font-size:8.5pt;color:#888;letter-spacing:.1em;margin-top:1mm}
+.sd-to{margin-top:7mm}
+.sd-to-name{font-size:13.5pt;font-weight:700}
+.sd-to-name small{font-size:10pt;font-weight:500;color:#555}
+.sd-amount{margin-top:5mm;border-left:4px solid var(--accent);background:var(--soft);padding:3mm 4mm;display:flex;flex-direction:column}
+.sd-amount span{font-size:8.5pt;color:var(--accent);font-weight:700}
+.sd-amount b{font-size:18pt;color:var(--accent);font-variant-numeric:tabular-nums}
+.sd-amount small{font-size:8.5pt;color:#444}
+.sd-greet{font-size:9pt;color:#555;margin-top:4mm}
+.sd-items{margin-top:3mm}
+.sd-items th{background:var(--lab-bg);color:var(--lab-fg);border:none}
+.sd-items td{border:none;border-bottom:1px solid #e6e6e6;font-size:9pt}
+.sd-note{margin-top:4mm;font-size:9pt;display:flex;gap:3mm;line-height:1.5}
+.sd-note b{color:var(--accent);white-space:nowrap}
+
+/* ── 작업완료확인서 (레터 · 카드 · 사이드바 공통 조각) ── */
+.wc2-lead{font-size:12pt;font-weight:500;margin-top:10mm}
+.wc2-info{margin-top:5mm}
+.wc2-info th,.wc2-info td{border:none;border-bottom:1px solid #e3e3e3;padding:3.2mm 3mm;font-size:11pt;height:auto}
+.wc2-info th{background:none;color:var(--accent);text-align:left;width:30mm}
+.wc2-attach{font-size:10.5pt;margin-top:8mm;color:#444}
+.wc2-date{text-align:center;font-size:13pt;margin-top:14mm;letter-spacing:.05em}
+.wc2-signs{display:grid;grid-template-columns:1fr 1fr;gap:6mm;margin-top:12mm}
+.wc2-signs.one{grid-template-columns:1fr;margin-top:14mm}
+.wc2-sign{border:1px solid var(--line);border-radius:3mm;padding:4mm 5mm}
+.wc2-sign .k{font-size:9pt;color:var(--accent);font-weight:700}
+.wc2-sign .v{font-size:12pt;font-weight:700;margin:2mm 0 4mm}
+.wc2-sign .line{font-size:10pt}
+/* 사진 페이지: 표형만 이중 테두리 */
+.layout-letter .frame,.layout-card .frame,.layout-sidebar .frame{display:none}
+.layout-letter .ph-title,.layout-card .ph-title,.layout-sidebar .ph-title{text-align:left;border-bottom:2px solid var(--accent);padding-bottom:2mm}
+
+/* ── 계약서 (표 형식, 깔끔하게) ── */
+.ct2-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:5mm}
+.ct2-title{font-size:21pt;font-weight:700;color:var(--accent);letter-spacing:.12em}
+.ct2-date{font-size:10pt;background:var(--soft);border-radius:2mm;padding:2mm 4mm}
+.ct2-date span{color:var(--accent);font-weight:700;margin-right:3mm}
+.ct2-box{border:1.5px solid var(--accent);border-radius:3mm;overflow:hidden;margin-bottom:4mm}
+.ct2-t{table-layout:fixed}
+.ct2-t th,.ct2-t td{border:none;border-bottom:1px solid #e3e3e3;border-left:1px solid #e3e3e3;padding:2.4mm 3mm;font-size:10pt;height:9.4mm}
+.ct2-t tr:last-child th,.ct2-t tr:last-child td{border-bottom:none}
+.ct2-t th{background:var(--lab-bg);color:var(--lab-fg);font-weight:700;text-align:center;white-space:nowrap;letter-spacing:-.02em}
+.ct2-t td.ct2-sec{background:var(--accent);color:#fff;font-weight:700;text-align:center;border-left:none;line-height:1.7}
+.ct2-t td.b{font-weight:700}
+.ct2-t .k{color:var(--accent);font-weight:700;font-size:9pt;margin-right:2mm}
+.ct2-t .k.gap{margin-left:6mm}
+.ct2-text{background:var(--soft);border-radius:3mm;padding:4mm 5mm;font-size:9.8pt;line-height:1.85}
+.ct2-day{text-align:center;font-size:12pt;margin:6mm 0 5mm;letter-spacing:.05em}
+.ct2-signs{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+.ct2-sign{border:1px solid var(--line);border-radius:3mm;padding:4mm 5mm}
+.ct2-sign .who{font-size:9pt;color:var(--accent);font-weight:700}
+.ct2-sign .name{font-size:11.5pt;font-weight:700;margin:1.5mm 0 2.5mm}
+.ct2-dl th,.ct2-dl td{border:none;padding:1mm 0;font-size:9.5pt;background:none;text-align:left;height:auto;vertical-align:top}
+.ct2-dl th{width:15mm;color:#666;font-weight:500}

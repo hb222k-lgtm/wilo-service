@@ -210,9 +210,10 @@ def layout_contract(doc, co):
     amt = int(doc.get('supply_amount') or 0)
     vat = vat_label(d.get('vat_mode'))
     ctr = lambda s, **kw: C(s, align='CENTER', **kw)
+    lbl = lambda s, **kw: C(s, align='CENTER', role='label', **kw)  # 항목 이름 칸 (새 배치에서 색칠)
     # 서명란: 왼쪽 "갑"(3칸) · 오른쪽 "을"(3칸, 마지막 칸은 (인) 자리)
     L, R = (1, 1, 0, 0), (1, 1, 0, 0)
-    sign = [(9, [C('"갑"', cs=3, b=(1, 1, 1, 0)), C('"을"', cs=3, b=(1, 1, 1, 0))]),
+    sign = [(9, [C('"갑"', cs=3, b=(1, 1, 1, 0), role='who'), C('"을"', cs=3, b=(1, 1, 1, 0), role='who')]),
             (8.5, [C(doc['client_name'], cs=3, b=L), C(f'주    소 : {co["address"]}', cs=3, b=R, size=9.5)]),
             (8.5, [C(f'주    소 : {c.get("address", "")}', cs=3, b=L), C(f'상    호 : {co["name"]}', cs=3, b=R)]),
             (8.5, [C(f'대 표 자 : {spaced(c.get("ceo"))} ( 인 )', cs=3, b=L), C(f'대 표 자 : {spaced(co["ceo"])}', cs=2, b=(1, 0, 0, 0)),
@@ -220,21 +221,21 @@ def layout_contract(doc, co):
             (8.5, [C(f'전    화 : {c.get("tel", "")}', cs=3, b=L), C(f'전    화 : {co["tel"]}', cs=3, b=R)]),
             (5, [C(cs=3, b=(1, 1, 0, 1)), C(cs=3, b=(1, 1, 0, 1))])]
     rows = [
-        (9.5, [C('공사도급표준계약서', cs=3, rs=2, size=17, bold=True, align='CENTER', title=True), ctr('계약일자', cs=3)]),
+        (9.5, [C('공사도급표준계약서', cs=3, rs=2, size=17, bold=True, align='CENTER', title=True), lbl('계약일자', cs=3)]),
         (9.5, [ctr(ymd(doc['doc_date']), cs=3)]),
-        (9.5, [ctr('계\n약\n자', rs=4, bold=True), ctr('발주처'), C(f"○ {doc['client_name']}", cs=4)]),
-        (9.5, [ctr('계약대상자', rs=3), C(f"○ 상호 또는 법인 명칭 : {co['name']}"), C(f"○ 사업자등록번호 : {co['biz_no']}", cs=3, size=9.5)]),
+        (9.5, [ctr('계\n약\n자', rs=4, bold=True, role='sec'), lbl('발주처'), C(f"○ {doc['client_name']}", cs=4)]),
+        (9.5, [lbl('계약대상자', rs=3), C(f"○ 상호 또는 법인 명칭 : {co['name']}"), C(f"○ 사업자등록번호 : {co['biz_no']}", cs=3, size=9.5)]),
         (9.5, [C(f"○ 주소 : {co['address']}"), C(f"○ 전화번호 : {co['tel']}", cs=3)]),
         (9.5, [C(f"○ 대표자 : {spaced(co['ceo'])}"), C(cs=3)]),
-        (9.5, [ctr('계\n약\n내\n용', rs=8, bold=True), ctr('공 사 명'), C(doc.get('title'), cs=4)]),
-        (9.5, [ctr('계 약 금'), C(f'일금 {kor_num(amt)} 원정 ( ₩{won(amt)}원/{vat} )', cs=4)]),
-        (9.5, [ctr('계약이행보증금'), C(d.get('perf_bond'), cs=4)]),
-        (9.5, [ctr('하자이행보증금'), C(d.get('defect_bond'), cs=4)]),
-        (9.5, [ctr('하자담보기간'), C(d.get('warranty'), cs=4)]),
-        (9.5, [ctr('지체상금율'), C(d.get('delay_rate'), cs=4)]),
-        (9.5, [ctr('착공년월일'), ctr(ymd(d.get('start_date'), True)), ctr('준공년월일'), ctr(ymd(d.get('end_date'), True), cs=2)]),
-        (9.5, [ctr('기타사항'), C(d.get('etc_note'), cs=4)]),
-        (22, [C('도급인("갑")과 수급인("을")은 상기와 같이 공사계약을 체결하고 신의에 성실히 계약상의 의무를 이행할 것을 확약하며, '
+        (9.5, [ctr('계\n약\n내\n용', rs=8, bold=True, role='sec'), lbl('공 사 명'), C(doc.get('title'), cs=4)]),
+        (9.5, [lbl('계 약 금'), C(f'일금 {kor_num(amt)} 원정 ( ₩{won(amt)}원/{vat} )', cs=4)]),
+        (9.5, [lbl('계약이행보증금'), C(d.get('perf_bond'), cs=4)]),
+        (9.5, [lbl('하자이행보증금'), C(d.get('defect_bond'), cs=4)]),
+        (9.5, [lbl('하자담보기간'), C(d.get('warranty'), cs=4)]),
+        (9.5, [lbl('지체상금율'), C(d.get('delay_rate'), cs=4)]),
+        (9.5, [lbl('착공년월일'), ctr(ymd(d.get('start_date'), True)), lbl('준공년월일'), ctr(ymd(d.get('end_date'), True), cs=2)]),
+        (9.5, [lbl('기타사항'), C(d.get('etc_note'), cs=4)]),
+        (22, [C(role='text', text='도급인("갑")과 수급인("을")은 상기와 같이 공사계약을 체결하고 신의에 성실히 계약상의 의무를 이행할 것을 확약하며, '
                 '이 계약의 증서로서 계약서를 작성하여 당사자 간 기명, 날인 후 각각 1통씩 보관한다.', cs=6)]),
         (9.5, [C(f"붙임서류 : {d.get('attachments') or ''}", cs=3), C(cs=3)]),
         (12, [C(ymd(doc['doc_date']) + '   ', cs=6, align='RIGHT')]),
@@ -309,6 +310,335 @@ def completion_grid(photos):
     return blocks
 
 
+# ── 새 배치 (레터형 · 카드형 · 사이드바형) — print-layouts.js와 같은 구성 ────────
+# 색은 자리표시(@accent 등)로 두고 apply_theme에서 시안 색으로 바꾼다.
+ACCENT, SOFT, LABBG, LABFG = '@accent', '@soft', '@lab_bg', '@lab_fg'
+WHITE, MUTED = '#FFFFFF', '#666666'
+NONE, HAIR = (0, 0, 0, 0), (0, 0, 0, 1)
+
+TRADE = {
+    'quote': {'title': '견 적 서', 'plain': '견적서', 'en': 'QUOTATION', 'numbered': False,
+              'greet': '귀사의 일익 번창하심을 기원합니다. 아래와 같이 견적드리오니 검토 바랍니다.'},
+    'statement': {'title': '거 래 명 세 서', 'plain': '거래명세서', 'en': 'STATEMENT', 'numbered': True,
+                  'greet': '다음과 같이 계산합니다.'},
+}
+
+
+def trade_meta(kind, doc, c, d):
+    if kind == 'quote':
+        tel = ' · '.join(x for x in [c.get('tel') and 'TEL ' + c['tel'], c.get('fax') and 'FAX ' + c['fax']] if x)
+        rows = [('공사명', doc.get('title')), ('유효기간', d.get('valid_until')), ('연락처', tel)]
+    else:
+        rows = [('공사명', doc.get('title')), ('사업자번호', c.get('biz_no')), ('대표자', c.get('ceo')),
+                ('주소', c.get('address')), ('연락처', c.get('tel'))]
+    return [(k, v) for k, v in rows if v]
+
+
+def vat_word(d):
+    return '부가세 없음' if d.get('vat_mode') == 'none' else 'VAT 포함'
+
+
+def doc_meta(doc, en=''):
+    parts = [en, doc.get('doc_no'), (doc.get('doc_date') or '').replace('-', '.')]
+    return ' · '.join(p for p in parts if p)
+
+
+def trade_items(doc):
+    return [it for it in doc['data'].get('items') or [] if it.get('name') or it.get('price')]
+
+
+def item_widths(numbered, compact=False):
+    if compact:  # 사이드바형 본문 폭 128mm
+        return [8, 40, 11, 10, 18, 22, 19] if numbered else [48, 11, 10, 18, 22, 19]
+    return [9, 62, 14, 13, 24, 30, 28] if numbered else [71, 14, 13, 24, 30, 28]
+
+
+def item_rows(items, d, numbered, style, min_rows=10):
+    """품목표 행 — style 'letter'(머리칸 색 · 줄무늬) · 'card'(강조색 글씨 · 가는 선) · 'side'"""
+    head = (['No'] if numbered else []) + ['품목명', '규격', '수량', '단가', '공급가액', '부가세']
+    al = (['CENTER'] if numbered else []) + ['LEFT', 'CENTER', 'CENTER', 'RIGHT', 'RIGHT', 'RIGHT']
+    if style == 'card':
+        rows = [(7.5, [C(h, bold=True, size=8.5, color=ACCENT, b=HAIR, align='CENTER' if a == 'LEFT' else a) for h, a in zip(head, al)])]
+    else:
+        rows = [(7.5, [C(h, bold=True, size=9, bg=LABBG, color=LABFG, b=HAIR, align='CENTER' if a == 'LEFT' else a) for h, a in zip(head, al)])]
+    none_vat = d.get('vat_mode') == 'none'
+    for i in range(max(min_rows, len(items))):
+        bg = SOFT if style == 'letter' and i % 2 == 1 else None
+        if i >= len(items):
+            rows.append((7, [C(b=HAIR, bg=bg) for _ in head]))
+            continue
+        it = items[i]
+        a = round(float(it.get('qty') or 0) * float(it.get('price') or 0))
+        vals = ([C(i + 1)] if numbered else []) + [C(it.get('name')), C(it.get('spec')), C(it.get('qty')),
+                C(num=it.get('price') or 0), C(num=a), C('-') if none_vat else C(num=item_tax(a, d.get('vat_mode')))]
+        for cell, a_ in zip(vals, al):
+            cell.update(align=a_, b=HAIR, size=9.5, **({'bg': bg} if bg else {}))
+        rows.append((7, vals))
+    return rows
+
+
+def sum_rows(supply, tax, ncols, size=9.5, grand=11.5):
+    """합계 3줄 — 마지막 두 칸에 이름 · 금액"""
+    pad = [C(cs=ncols - 2, b=NONE)] if ncols > 2 else []
+    return [(7, pad + [C('공급가액', b=HAIR, size=size), C(num=supply, align='RIGHT', b=HAIR, size=size)]),
+            (7, [C(cs=ncols - 2, b=NONE)] + [C('부가세', b=HAIR, size=size), C(num=tax, align='RIGHT', b=HAIR, size=size)]),
+            (8.5, [C(cs=ncols - 2, b=NONE)] + [C('합계', bold=True, color=ACCENT, b=HAIR, size=11),
+                                               C(f'₩ {won(supply + tax)}', bold=True, color=ACCENT, align='RIGHT', b=HAIR, size=grand)])]
+
+
+def letter_head(co, title, doc):
+    info2 = ' · '.join(x for x in [f"TEL {co.get('tel', '')}", co.get('fax') and f"FAX {co['fax']}", co.get('email')] if x)
+    return [T([110, 70], [
+        (10, [C(co['name'], size=18, bold=True, color=ACCENT, valign='BOTTOM'), C(img=('logo', 25, 7), align='RIGHT', valign='BOTTOM')]),
+        (5, [C(co.get('address'), size=8.5, color=MUTED), C(title, rs=2, size=20, bold=True, color=ACCENT, align='RIGHT', valign='BOTTOM')]),
+        (5, [C(info2, size=8.5, color=MUTED)]),
+        (5.5, [C(f"사업자번호 {co.get('biz_no', '')} · 대표 {co.get('ceo', '')}", size=8.5, color=MUTED),
+               C(doc_meta(doc), size=9, color=MUTED, align='RIGHT')]),
+        (1, [C(cs=2, bg=ACCENT)]),
+    ], border=False)]
+
+
+def foot_text(doc, co, kind):
+    d = doc['data']
+    parts = []
+    if d.get('note'):
+        parts.append('비고\n' + d['note'])
+    bank = doc_bank(doc, co)
+    if bank:
+        parts.append('입금계좌\n' + bank)
+    if kind == 'statement':
+        parts.append('인수자 확인   ________________ (인)')
+    return '\n\n'.join(parts)
+
+
+def letter_trade(doc, co, kind):
+    d, c, K = doc['data'], doc['data'].get('client') or {}, TRADE[kind]
+    items = trade_items(doc)
+    supply, tax = sum_items(items, d.get('vat_mode'))
+    meta = trade_meta(kind, doc, c, d) or [('', '')]
+    to = [(10, [C(f"{doc['client_name']}   귀하", cs=2, size=14, bold=True), C(),
+                C(f'합계 금액 ({vat_word(d)})', bg=SOFT, color=ACCENT, bold=True, size=9, align='RIGHT', valign='BOTTOM')])]
+    for i, (k, v) in enumerate(meta):
+        cells = [C(k, color=ACCENT, bold=True, size=9.5), C(v, size=9.5), C()]
+        if i == 0:
+            cells.append(C(f'₩ {won(supply + tax)}', rs=len(meta), bg=SOFT, color=ACCENT, bold=True, size=20, align='RIGHT'))
+        to.append((6.5, cells))
+    to.append((8, [C(K['greet'], cs=2, size=9, color=MUTED), C(), C(f'금 {kor_num(supply + tax)}원 정', bg=SOFT, size=8.5, align='RIGHT')]))
+    widths = item_widths(K['numbered'])
+    return letter_head(co, K['title'], doc) + [
+        ('s', 5), T([22, 86, 6, 66], to, border=False),
+        ('s', 5), T(widths, item_rows(items, d, K['numbered'], 'letter'), border=False),
+        ('s', 1), T(widths, sum_rows(supply, tax, len(widths)), border=False),
+        ('s', 6), T([100, 10, 54, 16], [
+            (7, [C(foot_text(doc, co, kind), rs=3, size=9, valign='TOP'), C(rs=3), C(ymd(doc['doc_date']), cs=2, align='RIGHT')]),
+            (8, [C(co['name'], cs=2, bold=True, size=12.5, align='RIGHT')]),
+            (9, [C(f"대표  {co['ceo']}", align='RIGHT'), C('(인)', align='CENTER', stamp=True)]),
+        ], border=False),
+    ]
+
+
+def card_top(co, plain, en, doc):
+    return [T([120, 60], [
+        (12, [C(plain, size=24, bold=True, color=ACCENT), C(img=('logo', 25, 7), align='RIGHT', valign='BOTTOM')]),
+        (6, [C(doc_meta(doc, en), size=8.5, color=MUTED), C(co['name'], bold=True, size=12, align='RIGHT')]),
+    ], border=False)]
+
+
+def card_trade(doc, co, kind):
+    d, c, K = doc['data'], doc['data'].get('client') or {}, TRADE[kind]
+    items = trade_items(doc)
+    supply, tax = sum_items(items, d.get('vat_mode'))
+    total = supply + tax
+    if kind == 'quote':
+        sub1 = ' · '.join(x for x in [c.get('tel') and 'TEL ' + c['tel'], c.get('fax') and 'FAX ' + c['fax']] if x)
+        sub2 = '유효기간 ' + d['valid_until'] if d.get('valid_until') else ''
+    else:
+        sub1 = ' · '.join(x for x in [c.get('biz_no') and '사업자 ' + c['biz_no'], c.get('ceo') and '대표 ' + c['ceo']] if x)
+        sub1 += ('\n' + c['address']) if c.get('address') else ''
+        sub2 = '연락처 ' + c['tel'] if c.get('tel') else ''
+    soft = lambda t='', **kw: C(t, bg=SOFT, **kw)
+    acc = lambda t='', **kw: C(t, bg=ACCENT, color=WHITE, **kw)
+    widths = item_widths(K['numbered'])
+    return card_top(co, K['plain'], K['en'], doc) + [
+        ('s', 5),
+        T([57, 4, 57, 4, 58], [
+            (6.5, [soft('받는 분' if kind == 'quote' else '공급받는자', color=ACCENT, bold=True, size=8.5), C(rs=3),
+                   soft('공사명', color=ACCENT, bold=True, size=8.5), C(rs=3), acc(f'합계 금액 · {vat_word(d)}', bold=True, size=8.5)]),
+            (9, [soft(doc['client_name'], bold=True, size=11), soft(doc.get('title'), bold=True, size=11), acc(f'₩{won(total)}', bold=True, size=17)]),
+            (10, [soft(sub1, size=8.5, color=MUTED, valign='TOP'), soft(sub2, size=8.5, color=MUTED, valign='TOP'),
+                  acc(f'금 {kor_num(total)}원 정', size=8.5, valign='TOP')]),
+        ], border=False),
+        ('s', 3), P(K['greet'], size=9.5, color=MUTED),
+        ('s', 1), T(widths, item_rows(items, d, K['numbered'], 'card'), border=False),
+        ('s', 3), T([79, 32, 2, 30, 2, 35], [(8, [C(), soft(f'공급가액  {won(supply)}', size=9, align='CENTER'), C(),
+                                                   soft(f'부가세  {won(tax)}', size=9, align='CENTER'), C(),
+                                                   acc(f'합계  ₩{won(total)}', bold=True, size=9.5, align='CENTER')])], border=False),
+        ('s', 5),
+        T([86, 4, 74, 16], [
+            (6.5, [soft('비고 · 결제', color=ACCENT, bold=True, size=8.5), C(rs=4), soft('공급자', cs=2, color=ACCENT, bold=True, size=8.5)]),
+            (8, [soft(foot_text(doc, co, kind), rs=3, size=9, valign='TOP'), soft(co['name'], cs=2, bold=True, size=11)]),
+            (8, [soft(f"사업자번호 {co.get('biz_no', '')} · 대표 {co['ceo']}", size=8.5), soft('(인)', align='CENTER', stamp=True)]),
+            (11, [soft(f"{co.get('address', '')}\nTEL {co.get('tel', '')}" + (f" · {co['email']}" if co.get('email') else ''),
+                       cs=2, size=8.5, color=MUTED, valign='TOP')]),
+        ], border=False),
+    ]
+
+
+def side_page(doc, co, main, ncols, widths):
+    """사이드바형: 왼쪽 색 띠(회사 정보 · 직인) + 오른쪽 본문을 한 표로"""
+    n = len(main) + 3
+    main = main + [(9, [C(cs=ncols)]), (8, [C(cs=ncols)]), (10, [C(cs=ncols)])]  # 직인 자리
+    bank = doc_bank(doc, co) if doc['data'].get('items') else ''
+    info = [('대표', co.get('ceo')), ('사업자번호', co.get('biz_no')), ('주소', co.get('address')), ('전화', co.get('tel')),
+            ('팩스', co.get('fax')), ('이메일', co.get('email')), ('입금계좌', bank)]
+    info_text = '\n\n'.join(f'{k}\n{v}' for k, v in info if v)
+    left = {0: [C(co['name'], cs=2, rs=2, bg=ACCENT, color=WHITE, bold=True, size=14, valign='TOP')],
+            2: [C(info_text, cs=2, rs=n - 5, bg=ACCENT, color=WHITE, size=8.5, valign='TOP')],
+            n - 3: [C(ymd(doc['doc_date']), cs=2, bg=WHITE, size=9, align='CENTER', b=(1, 1, 1, 0))],
+            n - 2: [C(co['name'], cs=2, bg=WHITE, bold=True, size=10, align='CENTER', b=(1, 1, 0, 0))],
+            n - 1: [C(f"대표 {co['ceo']}", bg=WHITE, size=9, align='RIGHT', b=(1, 0, 0, 1)),
+                    C('(인)', bg=WHITE, size=9, align='CENTER', stamp=True, b=(0, 1, 0, 1))]}
+    rows = []
+    for i, (h, cells) in enumerate(main):
+        rows.append((h, left.get(i, []) + ([C(rs=n)] if i == 0 else []) + cells))
+    return T([34, 14, 4] + widths, rows, border=False)
+
+
+def side_trade(doc, co, kind):
+    d, c, K = doc['data'], doc['data'].get('client') or {}, TRADE[kind]
+    items = trade_items(doc)
+    supply, tax = sum_items(items, d.get('vat_mode'))
+    widths = item_widths(K['numbered'], compact=True)
+    n = len(widths)
+    full = lambda t='', **kw: C(t, cs=n, **kw)
+    main = [(12, [full(K['title'], size=21, bold=True, color=ACCENT)]),
+            (6, [full(doc_meta(doc, K['en']), size=8.5, color=MUTED)]),
+            (9, [full(f"{doc['client_name']}   귀하", size=13, bold=True, valign='BOTTOM')])]
+    main += [(6, [full(f'{k}    {v}', size=9.5)]) for k, v in trade_meta(kind, doc, c, d)]
+    main += [(3, [full()]),
+             (6, [full(f'합계 금액 ({vat_word(d)})', bg=SOFT, color=ACCENT, bold=True, size=8.5)]),
+             (10, [full(f'₩ {won(supply + tax)}', bg=SOFT, color=ACCENT, bold=True, size=17)]),
+             (6, [full(f'금 {kor_num(supply + tax)}원 정', bg=SOFT, size=8.5)]),
+             (8, [full(K['greet'], size=9, color=MUTED)])]
+    main += item_rows(items, d, K['numbered'], 'side')
+    main += sum_rows(supply, tax, n, size=9, grand=9.5)  # 좁은 칸이라 작게
+    if d.get('note'):
+        main.append((10, [full(f"비고    {d['note']}", size=9, valign='TOP')]))
+    if kind == 'statement':
+        main.append((9, [full('인수자 확인    ________________ (인)', size=9.5)]))
+    return [side_page(doc, co, main, n, widths)]
+
+
+def completion_info(doc):
+    d = doc['data']
+    amt = int(doc.get('supply_amount') or 0)
+    return [('공사명', doc.get('title')), ('발주처', doc['client_name']),
+            ('계약금액', f"일금 {kor_num(amt)}원정 (₩{won(amt)}, {vat_label(d.get('vat_mode'))})" if amt else ''),
+            ('계약일자', ymd_short(d.get('contract_date'))), ('착공일자', ymd_short(d.get('start_date'))),
+            ('준공일자', ymd_short(d.get('end_date')))]
+
+
+def photo_count(d):
+    if (d.get('photo_layout') or 'rows') == 'grid':
+        return len(d.get('photos') or [])
+    return sum(len(g.get('photos') or []) for g in d.get('groups') or [])
+
+
+def completion_photos(doc, co):
+    """작업사진 페이지 — 표형 작업완료서의 사진 부분을 그대로 사용"""
+    blocks = layout_completion(doc, co)
+    return blocks[next(i for i, b in enumerate(blocks) if b[0] == 'br'):] if any(b[0] == 'br' for b in blocks) else []
+
+
+def completion_signs(doc, co, soft=False):
+    box = (lambda b: {'bg': SOFT}) if soft else (lambda b: {'b': b})
+    return T([86, 8, 70, 16], [
+        (7, [C('발주처 확인', color=ACCENT, bold=True, size=9, **box((1, 1, 1, 0))), C(rs=3),
+             C('시공사', cs=2, color=ACCENT, bold=True, size=9, **box((1, 1, 1, 0)))]),
+        (9, [C(doc['client_name'], bold=True, size=12, **box((1, 1, 0, 0))), C(co['name'], cs=2, bold=True, size=12, **box((1, 1, 0, 0)))]),
+        (11, [C('확인자   ______________ (인)', **box((1, 1, 0, 1))), C(f"대표  {co['ceo']}", align='RIGHT', **box((1, 0, 0, 1))),
+              C('(인)', align='CENTER', stamp=True, **box((0, 1, 0, 1)))]),
+    ], border=False)
+
+
+def letter_completion(doc, co):
+    d = doc['data']
+    return letter_head(co, '작업완료확인서', doc) + [
+        ('s', 9), P('아래 공사를 완료하였음을 확인합니다.', size=12),
+        ('s', 3), T([32, 148], [(10, [C(k, color=ACCENT, bold=True, size=11, b=HAIR), C(v, size=11, b=HAIR)])
+                                for k, v in completion_info(doc)], border=False),
+        ('s', 7), P(f'별첨 : 작업사진 {photo_count(d)}매', size=10.5, color=MUTED),
+        ('s', 12), P(ymd(doc['doc_date']), size=13, align='CENTER'),
+        ('s', 10), completion_signs(doc, co),
+    ] + completion_photos(doc, co)
+
+
+def card_completion(doc, co):
+    d = doc['data']
+    info = completion_info(doc)
+    rows = []
+    for i in range(0, len(info), 2):
+        (k1, v1), (k2, v2) = info[i], info[i + 1]
+        first = i == 0
+        rows += [(6, [C(k1, bg=ACCENT if first else SOFT, color=WHITE if first else ACCENT, bold=True, size=8.5), C(),
+                      C(k2, bg=SOFT, color=ACCENT, bold=True, size=8.5)]),
+                 (11, [C(v1 or '-', bg=ACCENT if first else SOFT, color=WHITE if first else None, bold=True, size=11, valign='TOP'), C(),
+                       C(v2 or '-', bg=SOFT, bold=True, size=11, valign='TOP')]),
+                 (4, [C(cs=3)])]
+    return card_top(co, '작업완료확인서', 'COMPLETION', doc) + [
+        ('s', 5), P('아래 공사를 완료하였음을 확인합니다.', size=10, color=MUTED),
+        ('s', 3), T([88, 4, 88], rows, border=False),
+        ('s', 5), P(f'별첨 : 작업사진 {photo_count(d)}매', size=10, color=MUTED),
+        ('s', 10), P(ymd(doc['doc_date']), size=13, align='CENTER'),
+        ('s', 8), completion_signs(doc, co, soft=True),
+    ] + completion_photos(doc, co)
+
+
+def side_completion(doc, co):
+    d = doc['data']
+    widths = [32, 96]
+    main = [(12, [C('작업완료확인서', cs=2, size=21, bold=True, color=ACCENT)]),
+            (6, [C(doc_meta(doc, 'COMPLETION'), cs=2, size=8.5, color=MUTED)]),
+            (16, [C('아래 공사를 완료하였음을 확인합니다.', cs=2, size=12, valign='BOTTOM')])]
+    main += [(10, [C(k, color=ACCENT, bold=True, size=11, b=HAIR), C(v, size=11, b=HAIR)]) for k, v in completion_info(doc)]
+    main += [(14, [C(f'별첨 : 작업사진 {photo_count(d)}매', cs=2, size=10.5, color=MUTED)]),
+             (8, [C('발주처 확인', cs=2, color=ACCENT, bold=True, size=9, b=(1, 1, 1, 0))]),
+             (9, [C(doc['client_name'], cs=2, bold=True, size=12, b=(1, 1, 0, 0))]),
+             (11, [C('확인자   ______________ (인)', cs=2, b=(1, 1, 0, 1))]),
+             (60, [C(cs=2)])]
+    return [side_page(doc, co, main, 2, widths)] + completion_photos(doc, co)
+
+
+def pretty_contract(doc, co):
+    """계약서: 표 형식 그대로, 구역 칸 · 항목 칸에 색을 넣어 깔끔하게"""
+    blocks = layout_contract(doc, co)
+    for _, cells in blocks[0][1]['rows']:
+        for cell in cells:
+            role = cell.get('role')
+            if role == 'sec':
+                cell.update(bg=ACCENT, color=WHITE)
+            elif role == 'label':
+                cell.update(bg=LABBG, color=LABFG, bold=True)
+            elif role == 'text':
+                cell.update(bg=SOFT)
+            elif role == 'who':
+                cell.update(color=ACCENT, bold=True)
+            if cell.get('title'):
+                cell['title'] = False
+                cell['color'] = ACCENT
+    return blocks
+
+
+NEW_LAYOUTS = {
+    'letter': {'quote': lambda d, c: letter_trade(d, c, 'quote'), 'statement': lambda d, c: letter_trade(d, c, 'statement'),
+               'contract': pretty_contract, 'completion': letter_completion},
+    'card': {'quote': lambda d, c: card_trade(d, c, 'quote'), 'statement': lambda d, c: card_trade(d, c, 'statement'),
+             'contract': pretty_contract, 'completion': card_completion},
+    'sidebar': {'quote': lambda d, c: side_trade(d, c, 'quote'), 'statement': lambda d, c: side_trade(d, c, 'statement'),
+                'contract': pretty_contract, 'completion': side_completion},
+}
+
+
 # 문서 디자인 시안 — print.html의 .theme-* 와 같은 색 · 글꼴
 THEMES = {
     'classic': {'lab_bg': '#EFEFEF', 'lab_fg': '#000000', 'line': '#777777', 'accent': '#000000', 'soft': '#DFE5EE',
@@ -327,10 +657,13 @@ def theme_of(company):
 
 
 def apply_theme(blocks, th):
-    """레이아웃의 기본 색(회색 머리칸 · 파란 바탕 · 제목)을 시안 색으로 바꾼다"""
+    """레이아웃의 기본 색(회색 머리칸 · 파란 바탕 · 제목 · @자리표시)을 시안 색으로 바꾼다"""
+    slot = {ACCENT: th['accent'], SOFT: th['soft'], LABBG: th['lab_bg'], LABFG: th['lab_fg']}
     for kind, *rest in blocks:
         if kind == 'p':
             p = rest[0]
+            if p.get('color') in slot:
+                p['color'] = slot[p['color']]
             if p.get('title'):
                 p.update(color=th['accent'], underline=th['underline'], align=th['title_align'])
             elif p.get('text') == '작업사진':
@@ -338,6 +671,9 @@ def apply_theme(blocks, th):
         elif kind == 't':
             for _, cells in rest[0]['rows']:
                 for cell in cells:
+                    for k in ('bg', 'color'):
+                        if cell.get(k) in slot:
+                            cell[k] = slot[cell[k]]
                     if cell.get('bg') == GRAY:
                         cell.update(bg=th['lab_bg'], color=th['lab_fg'])
                     elif cell.get('bg') == BLUE:
@@ -351,7 +687,9 @@ LAYOUTS = {'quote': layout_quote, 'statement': layout_statement, 'contract': lay
 
 
 def build_blocks(doc, co):
-    return apply_theme(LAYOUTS[doc['doc_type']](doc, co), theme_of(co))
+    table = NEW_LAYOUTS.get(co.get('layout'), LAYOUTS)  # 표형(기본)은 LAYOUTS
+    fn = table[doc['doc_type']]
+    return apply_theme(fn(doc, co), theme_of(co))
 
 
 # ── 이미지 ───────────────────────────────────────────────────────────────────

@@ -89,6 +89,24 @@ th,.lab{background:var(--lab-bg);color:var(--lab-fg);text-align:center;font-weig
 .wc-date{text-align:center;font-size:13pt;margin-top:14mm}
 .wc-sign{position:absolute;left:96mm;top:236mm;font-size:10.5pt;line-height:2}
 
+/* 소견서 */
+.op-title{font-size:26pt;font-weight:700;text-align:center;letter-spacing:.5em;padding-left:.5em;margin:6mm 0 9mm;color:var(--accent)}
+.op-head{display:flex;justify-content:space-between;gap:8mm;align-items:flex-start}
+.op-to{width:78mm;padding-top:2mm}
+.op-to-name{font-size:11.5pt;font-weight:700;border-bottom:1.5px solid #000;padding-bottom:1mm}
+.op-date{font-size:10.5pt;margin-top:2mm}
+.op-greet{font-size:10.5pt;line-height:1.7;margin-top:9mm}
+.op-co{width:84mm}
+.op-co-name{font-size:16pt;font-weight:700;margin-bottom:1.5mm;color:var(--accent)}
+.op-stamp{width:10mm;height:6mm;vertical-align:middle;margin-left:-4mm}
+.op-info th,.op-info td{border:none;height:auto;padding:.5mm 0;font-size:8.5pt;text-align:left;background:none;color:#000;vertical-align:top}
+.op-info th{width:21mm;color:#555;font-weight:400;letter-spacing:.05em}
+.op-info td{font-weight:500}
+.op-rule{border-top:1.5px solid var(--accent);margin:7mm 0 6mm}
+.op-sec{font-size:12pt;font-weight:700;margin-bottom:4mm;color:var(--accent)}
+.op-subject{font-size:11pt;font-weight:700;margin-bottom:4mm}
+.flow{font-size:10.5pt;line-height:1.85}
+.op-gap{height:3mm}
 .ph-title{font-size:14pt;font-weight:700;text-align:center;margin:3mm 0 6mm;color:var(--accent)}
 .ph-row{display:flex;gap:4mm;margin-bottom:5mm;align-items:stretch}
 .ph-label{width:9mm;font-weight:700;font-size:10.5pt;line-height:1.35;
@@ -118,7 +136,7 @@ th,.lab{background:var(--lab-bg);color:var(--lab-fg);text-align:center;font-weig
 <script src="/print-layouts.js"></script>
 <link rel="stylesheet" href="/print-layouts.css">
 <script>
-const TYPE_NAME = {quote:'견적서', statement:'거래명세서', contract:'공사도급표준계약서', completion:'작업완료확인서'};
+const TYPE_NAME = {quote:'견적서', statement:'거래명세서', contract:'공사도급표준계약서', completion:'작업완료확인서', opinion:'소견서'};
 
 function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function dot(d){ return d ? d.replace(/-/g,'/') : ''; }
@@ -342,6 +360,62 @@ function renderCompletionPhotos(d){
   return html;
 }
 
+// ── 소견서 ──────────────────────────────────────────────────────────────
+// 본문: 줄마다 한 덩어리 (**굵게** 지원, 앞 공백 유지) — 넘치면 paginateFlow가 다음 장으로 옮김
+function opLines(text){
+  return String(text || '').split('\n').map(l => l.trim() === '' ? '<div class="op-gap"></div>'
+    : `<div class="op-line">${esc(l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^ +/, m => '&nbsp;'.repeat(m.length))}</div>`).join('');
+}
+
+function opinionPhotos(d){
+  return (d.photos || []).length ? renderPhotoGrid(d.photos, '현장 사진') : '';
+}
+
+function renderOpinion(doc, co){
+  const d = doc.data;
+  const row = (k, v) => v ? `<tr><th>${k}</th><td>${esc(v)}</td></tr>` : '';
+  return `<div class="sheet"><div class="frame"></div>
+    <div class="op-title">소 견 서</div>
+    <div class="op-head">
+      <div class="op-to">
+        <div class="op-to-name">${esc(doc.client_name)} 귀하</div>
+        <div class="op-date">${ymd(doc.doc_date)}</div>
+        <p class="op-greet">귀사의 무궁한 발전을 기원합니다.<br>아래와 같은 소견을 밝힙니다.</p>
+      </div>
+      <div class="op-co">
+        <div class="op-co-name">${esc(co.name)}<span class="stamp-wrap op-stamp">${stampImg(co)}</span></div>
+        <table class="op-info">
+          ${row('대표자', co.ceo)}${row('사업자번호', co.biz_no)}${row('주 소', co.address)}
+          ${row('업태 · 종목', [co.biz_type, co.biz_item].filter(Boolean).join(' / '))}
+          ${row('연락처', [co.tel, co.fax && '팩스 ' + co.fax].filter(Boolean).join('   '))}${row('이메일', co.email)}
+        </table>
+      </div>
+    </div>
+    <div class="op-rule"></div>
+    <div class="op-sec">소견내용</div>
+    ${doc.title ? `<div class="op-subject">${esc(doc.title)}</div>` : ''}
+    <div class="flow" data-cont="소견내용 (계속)">${opLines(d.body)}</div>
+  </div>` + opinionPhotos(d);
+}
+
+// 내용이 A4 한 장을 넘으면 넘치는 줄(.flow 안)을 다음 장으로 옮긴다
+function paginateFlow(root){
+  for(let guard = 0; guard < 20; guard++){
+    const sheet = [...root.querySelectorAll('.sheet')].find(sh => sh.querySelector('.flow') && !sh.dataset.paged
+      && sh.scrollHeight > sh.clientHeight + 2);
+    if(!sheet) return;
+    sheet.dataset.paged = '1';
+    const flow = sheet.querySelector('.flow');
+    const next = document.createElement('div');
+    next.className = sheet.className.replace(/\bly-\S+/g, '');
+    next.innerHTML = `${sheet.querySelector('.frame') ? '<div class="frame"></div>' : ''}
+      <div class="op-sec">${esc(flow.dataset.cont || '')}</div><div class="flow" data-cont="${esc(flow.dataset.cont || '')}"></div>`;
+    sheet.after(next);
+    const nflow = next.querySelector('.flow');
+    while(sheet.scrollHeight > sheet.clientHeight + 2 && flow.children.length > 1) nflow.prepend(flow.lastElementChild);
+  }
+}
+
 function docId(){ return new URLSearchParams(location.search).get('id'); }
 
 function downloadFile(fmt){
@@ -392,14 +466,14 @@ async function downloadPdf(){
 }
 
 // 작업사진: 사진만 격자로 (한 페이지 최대 12장, 사진 수에 따라 2·3·4열)
-function renderPhotoGrid(photos){
+function renderPhotoGrid(photos, title='작업사진'){
   let html = '';
   for(let p = 0; p < photos.length; p += 12){
     const page = photos.slice(p, p + 12);
     const cols = page.length <= 4 ? 2 : page.length <= 9 ? 3 : 4;
     const rows = Math.ceil(page.length / cols);
     const w = 178 / cols - 4, h = Math.min(w * 1.3, 240 / rows - 9);
-    html += `<div class="sheet"><div class="frame"></div><div class="ph-title">작업사진</div>
+    html += `<div class="sheet"><div class="frame"></div><div class="ph-title">${title}</div>
       <div style="display:grid;grid-template-columns:repeat(${cols},${w}mm);gap:6mm 4mm;justify-content:center">
       ${page.map(ph => `<img src="/api/photo/${ph.folder}/${ph.filename}" style="width:${w}mm;height:${h}mm;object-fit:cover;display:block;background:#eee">`).join('')}
       </div></div>`;
@@ -441,8 +515,12 @@ function sampleDoc(type, co){
     contract: {client, vat_mode:'excluded', perf_bond:'생 략', defect_bond:'10%', warranty:'준공일로부터 6개월',
       delay_rate:'계약금액(VAT 포함) × (1/1000) × 총 지체일수', start_date:today, end_date:today, attachments:'1. 견적서'},
     completion: {vat_mode:'excluded', contract_date:today, start_date:today, end_date:today, photo_layout:'grid', photos:[]},
+    opinion: {client, photos:[], body:'1. 귀 현장 부스타 펌프에 부착된 **팽창탱크의 에어 구멍에서 물이 누출**되는 현상이 확인되었습니다.\n\n'
+      + '2. 팽창탱크는 내부에 공기와 물을 분리하는 고무막(다이어프램)이 있어, 압력을 저장·조절함으로써\n    펌프의 빈번한 기동을 방지하고 안정적인 급수를 유지하는 역할을 합니다.\n\n'
+      + '3. 현재 물이 에어 구멍으로 배출되는 것은 **내부 고무막이 파손된 상태**임을 의미합니다.\n\n'
+      + '4. 위 상태가 지속될 경우,\n    • 펌프 수명 단축\n    • 불필요한 전력 소모\n    • 급수 압력 불안정\n    등의 문제가 발생하므로, **팽창탱크를 교체하는 것이 불가피**합니다.'},
   }[type];
-  return {doc_type:type, doc_date:today, client_name:'○○아파트 입주자대표회의', title:'급수펌프 교체 공사',
+  return {doc_type:type, doc_date:today, client_name:'○○아파트 입주자대표회의', title: type === 'opinion' ? '부스타 펌프 팽창탱크 소견' : '급수펌프 교체 공사',
           supply_amount:653000, tax_amount:65300, data, company:co};
 }
 
@@ -462,6 +540,8 @@ async function initPreview(params){
   const el = document.getElementById('pages');
   el.innerHTML = renderDoc(sampleDoc(type, co), co);
   applyTheme(el, co);
+  await document.fonts.ready;
+  paginateFlow(el);
   fitWidth();
 }
 
@@ -474,7 +554,7 @@ function previewType(t){
 // 배치(표형 · 레터형 · 카드형 · 사이드바형)에 맞는 그리기 함수 — 나머지 배치는 print-layouts.js
 function renderDoc(doc, co){
   const layout = co.layout || 'table';
-  const table = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion};
+  const table = {quote:renderQuote, statement:renderStatement, contract:renderContract, completion:renderCompletion, opinion:renderOpinion};
   const fn = layout === 'table' ? table[doc.doc_type] : (LAYOUTS[layout] || {})[doc.doc_type];
   return (fn || table[doc.doc_type])(doc, co);
 }
@@ -491,6 +571,8 @@ async function init(){
     const co = doc.company;
     el.innerHTML = renderDoc(doc, co);
     applyTheme(el, co);
+    await document.fonts.ready;
+    paginateFlow(el);
     const name = `${TYPE_NAME[doc.doc_type]}_${doc.client_name||doc.site_name||''}_${(doc.doc_date||'').replace(/-/g,'')}`;
     document.title = name;  // PDF 저장 시 파일명
     document.getElementById('docName').textContent = name;

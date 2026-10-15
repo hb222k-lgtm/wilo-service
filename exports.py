@@ -11,7 +11,8 @@ from PIL import Image, ImageOps
 PAGE_W = 180  # A4 본문 폭(mm), 좌우 여백 15mm
 STAMP = 15    # 직인 크기(mm)
 
-TYPE_NAME = {'quote': '견적서', 'statement': '거래명세서', 'contract': '공사도급표준계약서', 'completion': '작업완료확인서'}
+TYPE_NAME = {'quote': '견적서', 'statement': '거래명세서', 'contract': '공사도급표준계약서', 'completion': '작업완료확인서',
+             'opinion': '소견서'}
 GRAY = '#EFEFEF'
 BLUE = '#DFE5EE'
 
@@ -279,7 +280,7 @@ def layout_completion(doc, co):
                          [C(img=('photo', ph['folder'], ph['filename'], 54, 68), align='CENTER', b=none) if ph else C(b=none) for ph in photos]))
             rows.append((7, [C(ph.get('caption') if ph else '', align='CENTER', b=none) for ph in photos]))
             rows.append((4, [C(b=none, cs=4)]))
-        blocks += [('br',), P('작업사진', size=14, bold=True, align='CENTER'), ('s', 5), T([12, 56, 56, 56], rows, border=False)]
+        blocks += [('br',), P('작업사진', size=14, bold=True, align='CENTER', heading=True), ('s', 5), T([12, 56, 56, 56], rows, border=False)]
     return blocks
 
 
@@ -292,7 +293,7 @@ def grid_shape(n):
     return cols, w, h
 
 
-def completion_grid(photos):
+def completion_grid(photos, title='작업사진'):
     """작업사진: 사진만 격자로 모아서 (항목 제목 · 설명 없음)"""
     none = (0, 0, 0, 0)
     blocks = []
@@ -305,7 +306,7 @@ def completion_grid(photos):
             rows.append((h + 2, [C(img=('photo', ph['folder'], ph['filename'], w, h), align='CENTER', b=none) if ph else C(b=none)
                                  for ph in line]))
             rows.append((4, [C(b=none, cs=cols)]))
-        blocks += [('br',), P('작업사진', size=14, bold=True, align='CENTER'), ('s', 5),
+        blocks += [('br',), P(title, size=14, bold=True, align='CENTER', heading=True), ('s', 5),
                    T([178 / cols] * cols, rows, border=False)]
     return blocks
 
@@ -631,13 +632,51 @@ def pretty_contract(doc, co):
     return blocks
 
 
+def letter_opinion(doc, co):
+    return letter_head(co, '소 견 서', doc) + [
+        ('s', 8), P(f"{doc['client_name']}   귀하", size=14, bold=True),
+        ('s', 2), P(OP_GREET.replace('\n', ' '), size=9.5, color=MUTED), ('s', 7),
+    ] + opinion_body(doc)
+
+
+def card_opinion(doc, co):
+    return card_top(co, '소견서', 'OPINION', doc) + [
+        ('s', 5),
+        T([88, 4, 72, 16], [
+            (6.5, [C('받는 분', bg=SOFT, color=ACCENT, bold=True, size=8.5), C(rs=3), C('소견 제목', cs=2, color=ACCENT, bold=True, size=8.5, b=(1, 1, 1, 0))]),
+            (9, [C(doc['client_name'], bg=SOFT, bold=True, size=11), C(doc.get('title') or '-', cs=2, bold=True, size=11, b=(1, 1, 0, 0))]),
+            (10, [C(OP_GREET.replace('\n', ' '), bg=SOFT, size=8.5, color=MUTED, valign='TOP'),
+                  C(f"{co['name']} · 대표 {co['ceo']}", size=8.5, b=(1, 0, 0, 1)), C('(인)', align='CENTER', stamp=True, b=(0, 1, 0, 1))]),
+        ], border=False),
+        ('s', 7),
+    ] + opinion_body(doc)
+
+
+def side_opinion(doc, co):
+    widths = [128]
+    full = opinion_body(doc)
+    cut = next((i for i, b in enumerate(full) if b[0] == 'br'), len(full))  # 사진 페이지는 표 밖으로
+    body, photos = full[:cut], full[cut:]
+    main = [(12, [C('소 견 서', size=21, bold=True, color=ACCENT)]),
+            (6, [C(doc_meta(doc, 'OPINION'), size=8.5, color=MUTED)]),
+            (10, [C(f"{doc['client_name']}   귀하", size=13, bold=True, valign='BOTTOM')]),
+            (12, [C(OP_GREET.replace('\n', ' '), size=9, color=MUTED)])]
+    for kind, *rest in body:  # 본문을 오른쪽 칸의 줄로
+        if kind == 's':
+            main.append((rest[0], [C()]))
+        else:
+            p = rest[0]
+            main.append((max(6, p.get('size', 10) * 0.6), [C(p['text'], size=p.get('size', 10), bold=p.get('bold', False), color=p.get('color'))]))
+    return [side_page(doc, co, main, 1, widths)] + photos
+
+
 NEW_LAYOUTS = {
     'letter': {'quote': lambda d, c: letter_trade(d, c, 'quote'), 'statement': lambda d, c: letter_trade(d, c, 'statement'),
-               'contract': pretty_contract, 'completion': letter_completion},
+               'contract': pretty_contract, 'completion': letter_completion, 'opinion': letter_opinion},
     'card': {'quote': lambda d, c: card_trade(d, c, 'quote'), 'statement': lambda d, c: card_trade(d, c, 'statement'),
-             'contract': pretty_contract, 'completion': card_completion},
+             'contract': pretty_contract, 'completion': card_completion, 'opinion': card_opinion},
     'sidebar': {'quote': lambda d, c: side_trade(d, c, 'quote'), 'statement': lambda d, c: side_trade(d, c, 'statement'),
-                'contract': pretty_contract, 'completion': side_completion},
+                'contract': pretty_contract, 'completion': side_completion, 'opinion': side_opinion},
 }
 
 
@@ -668,7 +707,7 @@ def apply_theme(blocks, th):
                 p['color'] = slot[p['color']]
             if p.get('title'):
                 p.update(color=th['accent'], underline=th['underline'], align=th['title_align'])
-            elif p.get('text') == '작업사진':
+            elif p.get('heading'):
                 p['color'] = th['accent']
         elif kind == 't':
             for _, cells in rest[0]['rows']:
@@ -685,7 +724,46 @@ def apply_theme(blocks, th):
     return blocks
 
 
-LAYOUTS = {'quote': layout_quote, 'statement': layout_statement, 'contract': layout_contract, 'completion': layout_completion}
+# ── 소견서 ─────────────────────────────────────────────────────────────────
+OP_GREET = '귀사의 무궁한 발전을 기원합니다.\n아래와 같은 소견을 밝힙니다.'
+
+
+def opinion_body(doc):
+    """소견내용 — 줄마다 문단 (**굵게** 표시는 빼고), 빈 줄은 여백"""
+    blocks = [P('소견내용', size=12, bold=True, color=ACCENT), ('s', 3)]
+    if doc.get('title'):
+        blocks += [P(doc['title'], size=11, bold=True), ('s', 2)]
+    for line in (doc['data'].get('body') or '').split('\n'):
+        if not line.strip():
+            blocks.append(('s', 3))
+            continue
+        bold = line.strip().startswith('**') and line.strip().endswith('**')
+        blocks.append(P(line.replace('**', ''), size=10.5, bold=bold))
+    photos = doc['data'].get('photos') or []
+    return blocks + (completion_grid(photos, '현장 사진') if photos else [])
+
+
+def layout_opinion(doc, co):
+    lab2 = lambda k: C(k, size=8.5, color=MUTED)
+    val = lambda v, **kw: C(v, cs=2, size=9, bold=True, **kw)
+    return [
+        ('s', 2), P('소 견 서', size=24, bold=True, align='CENTER', title=True), ('s', 7),
+        T([80, 10, 22, 52, 16], [
+            (9, [C(f"{doc['client_name']} 귀하", bold=True, size=11, b=HAIR, valign='BOTTOM'), C(rs=7),
+                 C(co['name'], cs=2, size=15, bold=True, color=ACCENT), C(stamp=True)]),
+            (6, [C(ymd(doc['doc_date']), size=10.5), lab2('대표자'), val(co.get('ceo'))]),
+            (6, [C(OP_GREET, rs=5, size=10.5), lab2('사업자번호'), val(co.get('biz_no'))]),
+            (6, [lab2('주 소'), val(co.get('address'), )]),
+            (6, [lab2('업태 · 종목'), val(' / '.join(x for x in [co.get('biz_type'), co.get('biz_item')] if x))]),
+            (6, [lab2('연락처'), val('   '.join(x for x in [co.get('tel'), co.get('fax') and '팩스 ' + co['fax']] if x))]),
+            (6, [lab2('이메일'), val(co.get('email'))]),
+        ], border=False),
+        ('s', 5), T([180], [(1, [C(bg=ACCENT)])], border=False), ('s', 6),
+    ] + opinion_body(doc)
+
+
+LAYOUTS = {'quote': layout_quote, 'statement': layout_statement, 'contract': layout_contract, 'completion': layout_completion,
+           'opinion': layout_opinion}
 
 
 def build_blocks(doc, co):
@@ -892,7 +970,9 @@ def render_xlsx(blocks, images, title, theme=None):
     ws.page_setup.orientation = 'portrait'
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0 if ws.row_breaks.brk else 1
+    # 한 장을 넘는 문서(긴 소견서, 사진 페이지)는 세로를 줄이지 않고 여러 장으로
+    total_mm = sum((ws.row_dimensions[r].height or 15) for r in range(1, row)) * 25.4 / 72
+    ws.page_setup.fitToHeight = 0 if ws.row_breaks.brk or total_mm > 272 else 1
     ws.page_margins.left = ws.page_margins.right = 0.55
     ws.page_margins.top = 0.5
     ws.page_margins.bottom = 0.4

@@ -459,6 +459,7 @@ details.client summary::-webkit-details-marker{display:none}
         <button class="doc-type-btn" onclick="App.newDoc('statement')"><span>🧾</span>거래명세서</button>
         <button class="doc-type-btn" onclick="App.newDoc('contract')"><span>🤝</span>계약서</button>
         <button class="doc-type-btn" onclick="App.newDoc('completion')"><span>✅</span>작업완료확인서</button>
+        <button class="doc-type-btn" onclick="App.newDoc('opinion')"><span>🔍</span>소견서</button>
       </div>
     </div>
   </div>
@@ -605,6 +606,7 @@ const DOC_TYPES = {
   statement:  {name:'거래명세서',     short:'명세서', icon:'🧾', client:'공급받는자 상호', date:'거래일자'},
   contract:   {name:'공사도급계약서', short:'계약서', icon:'🤝', client:'발주처',          date:'계약일자'},
   completion: {name:'작업완료확인서', short:'완료서', icon:'✅', client:'발주처',          date:'확인일자'},
+  opinion:    {name:'소견서',         short:'소견서', icon:'🔍', client:'수신',            date:'작성일자'},
 };
 const PHOTO_CAPTIONS = ['작업전', '작업중', '작업 완료'];
 // 문서 배치 (설정 화면 그림 — 실제 양식은 print.html · print-layouts.js · exports.py)
@@ -1033,6 +1035,7 @@ const App = {
               <button class="btn btn-sm btn-outline" onclick="App.triggerPhotoForVisit('${v.id}')">📷 사진 추가</button>
               <button class="btn btn-sm btn-outline" onclick="App.editVisit('${v.id}')">편집</button>
               <button class="btn btn-sm btn-outline" onclick="App.completionFromVisit('${v.id}')">📄 완료서</button>
+              <button class="btn btn-sm btn-outline" onclick="App.opinionFromVisit('${v.id}')">🔍 소견서</button>
               <button class="btn btn-sm" style="background:#fff3e0;color:#c05800" onclick="App.deleteVisit('${v.id}')">삭제</button>
             </div>
           </div>`;
@@ -1793,6 +1796,7 @@ const App = {
     if(type === 'contract') return {client, vat_mode:'excluded', perf_bond:'생 략', defect_bond:'10%',
       warranty:'준공일로부터 6개월', delay_rate:'계약금액(VAT 포함) × (1/1000) × 총 지체일수',
       start_date:'', end_date:'', etc_note:'', attachments:'1. 견적서'};
+    if(type === 'opinion') return {client, body:'', photo_layout:'grid', photos:[]};
     return {client, vat_mode:'excluded', contract_date:'', start_date:TODAY, end_date:TODAY,
       photo_layout:'grid', photos:[], groups:[{title:'', photos:[]}]};
   },
@@ -1859,7 +1863,8 @@ const App = {
         <input type="text" id="doc-site-input" value="${esc(site ? site.name : '')}" placeholder="현장명 검색..."
           autocomplete="off" oninput="App.docSiteSearch(this)" onfocus="App.docSiteSearch(this)"></div>
       ${this._f(t.client + ' *', 'client_name', {ph:'예) 옥정역 로제비앙메트로파크1단지 입주자대표회의'})}
-      ${this._f('공사명', 'title', {ph:'예) 급수펌프 소음 수리'})}
+      ${d.doc_type === 'opinion' ? this._f('소견 제목', 'title', {ph:'예) 부스타 펌프 팽창탱크 소견'})
+                                 : this._f('공사명', 'title', {ph:'예) 급수펌프 소음 수리'})}
       <div class="form-row">
         ${this._f(t.date, 'doc_date', {type:'date'})}
         ${d.doc_type === 'quote' ? this._f('유효기간', 'data.valid_until', {ph:'예) 견적 후 30일'}) : ''}
@@ -1891,6 +1896,14 @@ const App = {
             </select></div>
           ${this._f('비고', 'data.note', {area:true})}
         </div>`;
+    } else if(d.doc_type === 'opinion') {
+      html += `<div class="edit-section"><h3>소견내용</h3>
+        <div class="form-group"><textarea data-k="data.body" style="min-height:300px;line-height:1.6"
+          placeholder="1. 점검 결과 ...&#10;&#10;2. 문제점 및 위험 ...&#10;&#10;3. 권고 사항 ...">${esc(d.data.body || '')}</textarea>
+          <div style="font-size:12px;color:var(--sub);margin-top:6px;line-height:1.5">줄바꿈 그대로 인쇄됩니다 · <b>**강조할 말**</b>처럼 별표 두 개로 감싸면 굵게 · 길면 다음 장으로 이어집니다</div></div>
+      </div>
+      <div class="edit-section"><h3>현장 사진 <span style="font-weight:400;font-size:12px;color:var(--sub)">선택 · 뒤쪽 페이지에 붙습니다</span></h3>
+        ${this.gridPhotosHtml()}</div>`;
     } else {
       html += `<div class="edit-section"><h3>계약 금액 · 기간</h3>
         <div class="form-row">
@@ -2269,6 +2282,7 @@ const App = {
     if(data.items && 'bank' in src.data) data.bank = src.data.bank;
     ['start_date','end_date'].forEach(k => { if(src.data[k] && k in data) data[k] = src.data[k]; });
     if(toType === 'completion') data.contract_date = src.doc_type === 'contract' ? src.doc_date : (src.data.contract_date || '');
+    if((src.data.photos || []).length && 'photos' in data) data.photos = JSON.parse(JSON.stringify(src.data.photos));
     await this.openDocEditor({id:null, doc_type:toType, site_id:src.site_id, title:src.title, client_name:src.client_name,
       doc_date:TODAY, supply_amount:src.supply_amount, tax_amount:src.tax_amount, source_id:src.id, data});
     this.toast(`${DOC_TYPES[src.doc_type].short} 내용을 가져왔습니다 — 확인 후 저장하세요`);
@@ -2287,6 +2301,20 @@ const App = {
     data.groups = [{title, photos: []}];
     await this.openDocEditor({id:null, doc_type:'completion', site_id:null, title, client_name:'', doc_date:v.visit_date,
       supply_amount:0, tax_amount:0, source_id:null, data});
+    await this.docPickSite(site.id);
+  },
+
+  // 방문기록(작업내용 + 사진) → 소견서
+  async opinionFromVisit(visitId) {
+    const v = (this.currentVisits || []).find(x => x.id === visitId), site = this.currentSite;
+    if(!v || !site) return;
+    const co = (await this.loadCompanies())[0];
+    const data = this.defaultDocData('opinion', co);
+    const lines = (v.work_content || '').split('\n');
+    data.body = lines.slice(1).join('\n').trim();
+    data.photos = this.currentPhotos.filter(p => p.visit_id === visitId).reverse().map(p => ({folder: site.id, filename: p.filename}));
+    await this.openDocEditor({id:null, doc_type:'opinion', site_id:null, title: lines[0].trim() ? lines[0].trim() + ' 소견' : '',
+      client_name:'', doc_date: TODAY, supply_amount:0, tax_amount:0, source_id:null, data});
     await this.docPickSite(site.id);
   },
 

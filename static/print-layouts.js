@@ -256,9 +256,56 @@ function prettyContract(doc, co){
   </div>`;
 }
 
+// ── 소견서 (레터 · 카드 · 사이드바) ──────────────────────────────────────
+const OP_GREET = '귀사의 무궁한 발전을 기원합니다. 아래와 같은 소견을 밝힙니다.';
+
+function opBody(doc){
+  return `<div class="op-sec ly-op-sec">소견내용</div>
+    ${doc.title ? `<div class="op-subject">${esc(doc.title)}</div>` : ''}
+    <div class="flow" data-cont="소견내용 (계속)">${opLines(doc.data.body)}</div>`;
+}
+
+function letterOpinion(doc, co){
+  return `<div class="sheet ly-letter">
+    ${letterHead(co, '소 견 서', doc)}
+    <div class="lt-to-name" style="margin-top:8mm">${esc(doc.client_name)} <small>귀하</small></div>
+    <p class="lt-greet">${OP_GREET}</p>
+    <div style="height:6mm"></div>
+    ${opBody(doc)}
+  </div>` + opinionPhotos(doc.data);
+}
+
+function cardOpinion(doc, co){
+  return `<div class="sheet ly-card">
+    ${cardTop(co, {plain: '소견서', en: 'OPINION'}, doc)}
+    <div class="cd-cards two">
+      <div class="cd-card"><div class="cd-k">받는 분</div><div class="cd-v">${esc(doc.client_name)}</div><div class="cd-s">${OP_GREET}</div></div>
+      <div class="cd-card acc"><div class="cd-k">소견 제목</div><div class="cd-v">${esc(doc.title) || '-'}</div>
+        <div class="cd-s">${esc(co.name)} · 대표 ${esc(co.ceo)} ${lyStamp(co)}</div></div>
+    </div>
+    <div style="height:7mm"></div>
+    <div class="op-sec ly-op-sec">소견내용</div>
+    <div class="flow" data-cont="소견내용 (계속)">${opLines(doc.data.body)}</div>
+  </div>` + opinionPhotos(doc.data);
+}
+
+function sideOpinion(doc, co){
+  return `<div class="sheet ly-side">
+    ${sideBar(co, doc)}
+    <main class="sd-main">
+      <div class="sd-title">소 견 서</div>
+      <div class="sd-meta">OPINION${doc.doc_no ? ' · ' + esc(doc.doc_no) : ''} · ${lyDate(doc.doc_date)}</div>
+      <div class="sd-to"><div class="sd-to-name">${esc(doc.client_name)} <small>귀하</small></div></div>
+      <div class="sd-greet">${OP_GREET}</div>
+      <div style="height:6mm"></div>
+      ${opBody(doc)}
+    </main>
+  </div>` + opinionPhotos(doc.data);
+}
+
 LAYOUTS.letter = {quote: (d, c) => letterTrade(d, c, 'quote'), statement: (d, c) => letterTrade(d, c, 'statement'),
-                  contract: prettyContract, completion: letterCompletion};
+                  contract: prettyContract, completion: letterCompletion, opinion: letterOpinion};
 LAYOUTS.card = {quote: (d, c) => cardTrade(d, c, 'quote'), statement: (d, c) => cardTrade(d, c, 'statement'),
-                contract: prettyContract, completion: cardCompletion};
+                contract: prettyContract, completion: cardCompletion, opinion: cardOpinion};
 LAYOUTS.sidebar = {quote: (d, c) => sideTrade(d, c, 'quote'), statement: (d, c) => sideTrade(d, c, 'statement'),
-                   contract: prettyContract, completion: sideCompletion};
+                   contract: prettyContract, completion: sideCompletion, opinion: sideOpinion};

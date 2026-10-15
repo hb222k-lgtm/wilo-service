@@ -845,7 +845,7 @@ def serve_stamp():
 
 # ── Documents (견적서 / 거래명세서 / 계약서 / 작업완료확인서) ─────────────────
 
-DOC_PREFIX = {'quote': 'Q', 'statement': 'S', 'contract': 'C', 'completion': 'W'}
+DOC_PREFIX = {'quote': 'Q', 'statement': 'S', 'contract': 'C', 'completion': 'W', 'opinion': 'O'}
 
 
 def doc_row(r):
